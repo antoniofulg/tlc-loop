@@ -101,7 +101,8 @@ T24
 ```
 T25 -> T27
 T26
-T28
+T28 -> T29
+T30
 ```
 
 ---
@@ -917,6 +918,57 @@ T28
 - [ ] Every consumer of the detect contract sees one vocabulary: no caller needs to special-case a raw exit code
 - [ ] `references/phase-transitions.md` documents `state_corrupt` alongside the other halt reasons
 - [ ] Unit tests cover both branches: absent reconstructs, corrupt halts with the reason
+
+**Tests**: unit
+**Gate**: quick
+
+---
+
+### T29: Enforce the configured verify-round ceiling
+
+**What**: Make the verify-round limit an actual halt condition instead of a config key nobody reads.
+**Where**: `scripts/detect_phase.py`
+**Depends on**: T28
+**Reuses**: `_config.load_config` (already parses `verify.max_rounds`); the halt vocabulary from T28.
+**Requirement**: LOOP-04
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [ ] `verify.rounds` reaching `verify.max_rounds` without a PASS report prints `phase=H action=halt reason=verify_exhausted`
+- [ ] The halt is checked before any verify or fix phase is emitted, so an exhausted loop never dispatches another round
+- [ ] An omitted `max_rounds` means unlimited, consistent with the TOML-has-no-null rule
+- [ ] `references/phase-transitions.md` and `references/checklist.md` document `verify_exhausted`
+- [ ] Unit tests cover: below the limit dispatches, at the limit halts, unlimited never halts
+
+**Tests**: unit
+**Gate**: quick
+
+---
+
+### T30: Keep loop state out of task commits
+
+**What**: Stop `checkpoint.py`'s path-less branch from sweeping the machine-owned state file into a task's atomic commit.
+**Where**: `.gitignore`
+**Depends on**: None
+**Reuses**: The existing `.gitignore`.
+**Requirement**: LOOP-02
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [ ] `loop.json` is ignored wherever it appears under `.specs/features/`
+- [ ] A `checkpoint.py` run with no explicit paths leaves `loop.json` out of the resulting commit, proven by inspecting the commit's file list in a tmpdir repo
+- [ ] No already-tracked file becomes ignored by the change
+- [ ] The reason is recorded in `references/state-schema.md`: the file is a cache reconstructible from git, so committing it is churn
 
 **Tests**: unit
 **Gate**: quick
