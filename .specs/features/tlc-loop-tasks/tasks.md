@@ -582,7 +582,7 @@ T28
 
 ---
 
-### T18: Recovery loop reference
+### T18: Recovery loop reference ✅
 
 **What**: The self-healing repair procedure and the three-criteria external-blocker test.
 **Where**: `references/recovery-loop.md`
@@ -597,11 +597,16 @@ T28
 
 **Done when**:
 
-- [ ] The repair loop steps are stated, including that a blind rerun is not a repair
-- [ ] The normative failure-classification table is adapted to this project's gates
-- [ ] All three external-blocker criteria are stated, with what explicitly does not qualify
-- [ ] The prohibition on weakening, deleting, or skipping tests to pass a gate is stated
-- [ ] Compozy-specific rows are replaced, not carried over
+- [x] The repair loop steps are stated, including that a blind rerun is not a repair
+- [x] The normative failure-classification table is adapted to this project's gates
+- [x] All three external-blocker criteria are stated, with what explicitly does not qualify
+- [x] The prohibition on weakening, deleting, or skipping tests to pass a gate is stated
+- [x] Compozy-specific rows are replaced, not carried over
+
+> The table keys on the parent skill's gate *levels* (`quick`/`full`/`build`)
+> and on this skill's own scripts and exit codes, not on a specific build tool:
+> the skill is stack-agnostic, so the concrete command always comes from the
+> target feature's Gate Check Commands table.
 
 **Tests**: none
 **Gate**: build
