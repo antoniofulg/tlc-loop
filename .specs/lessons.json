@@ -13,7 +13,7 @@
       "scope": "scripts/detect_phase.py",
       "status": "candidate",
       "features": [
-        "tlc-loop-tasks"
+        "tlc-loop"
       ],
       "recurrence": 1,
       "harmful": 0,
@@ -31,7 +31,7 @@
       "scope": "scripts/detect_phase.py",
       "status": "candidate",
       "features": [
-        "tlc-loop-tasks"
+        "tlc-loop"
       ],
       "recurrence": 1,
       "harmful": 0,
@@ -49,7 +49,7 @@
       "scope": "SKILL.md",
       "status": "candidate",
       "features": [
-        "tlc-loop-tasks"
+        "tlc-loop"
       ],
       "recurrence": 1,
       "harmful": 0,
@@ -67,7 +67,7 @@
       "scope": "scripts/resolve_stage.py",
       "status": "candidate",
       "features": [
-        "tlc-loop-tasks"
+        "tlc-loop"
       ],
       "recurrence": 1,
       "harmful": 0,

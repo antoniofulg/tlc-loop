@@ -159,7 +159,7 @@ class EndToEnd(unittest.TestCase):
         base = self.tmp.name
 
         # 1. The two skills, side by side, exactly as _paths expects them.
-        self.skill_scripts = os.path.join(base, "skills", "tlc-loop-tasks", "scripts")
+        self.skill_scripts = os.path.join(base, "skills", "tlc-loop", "scripts")
         os.makedirs(self.skill_scripts)
         for name in os.listdir(SCRIPTS):
             if name.endswith(".py") and not name.startswith("test_"):

@@ -1,12 +1,12 @@
 ---
-name: tlc-loop-tasks
+name: tlc-loop
 description: Unattended execution loop that drives an approved tlc-spec-driven tasks.md from the first task to a verified PASS. Deterministic phase detection derived from git commit trailers, batch dispatch to per-stage configurable providers, one atomic commit per task, a self-healing repair loop, an independent Verifier, and recorded stop conditions instead of silent stalls. An interrupted run resumes correctly because the phase is re-derived from git, never stored. Use when (1) executing and validating a feature unattended, (2) resuming an interrupted loop run, (3) pairing a cheap implementer with a high-reasoning verifier across vendors. Triggers on "run the loop", "loop tasks", "execute unattended", "drive tasks.md to completion", "resume the loop", "continue the loop". Do NOT use for a single task, for a feature with no formal tasks.md, or for Specify, Design, or Tasks authoring - those stay interactive in tlc-spec-driven.
 license: CC-BY-4.0
 metadata:
   version: 0.1.0
 ---
 
-# Loop Tasks Driver
+# Unattended Execution Loop
 
 Drive an approved `tasks.md` to a verified PASS without per-batch prompting.
 Each iteration detects the current phase, runs exactly one phase action,

@@ -1,7 +1,7 @@
-# tlc-loop-tasks Design
+# tlc-loop Design
 
-**Spec**: `.specs/features/tlc-loop-tasks/spec.md`
-**Context**: `.specs/features/tlc-loop-tasks/context.md` (12 locked decisions — D1..D12)
+**Spec**: `.specs/features/tlc-loop/spec.md`
+**Context**: `.specs/features/tlc-loop/context.md` (12 locked decisions — D1..D12)
 **Status**: Draft
 
 ---
@@ -38,7 +38,7 @@ The skill is a phase machine. Each iteration runs exactly one phase action, then
 
 ```mermaid
 graph TD
-    INV["/tlc-loop-tasks feature"] --> DET
+    INV["/tlc-loop feature"] --> DET
     DET["detect_phase.py<br/>(read-only)"] --> P0
     DET --> PB
     DET --> PV

@@ -3,11 +3,11 @@
 ## Decisions
 
 _No project-level decisions promoted to project scope. Feature-level decisions
-live in `.specs/features/tlc-loop-tasks/context.md` (D1..D13)._
+live in `.specs/features/tlc-loop/context.md` (D1..D13)._
 
 ## Handoff
 
-- **Feature**: tlc-loop-tasks (`.specs/features/tlc-loop-tasks/`)
+- **Feature**: tlc-loop (`.specs/features/tlc-loop/`)
 - **Phase / Task**: Complete for the P1 group. `validate_state.py` exits 0.
 - **Completed**: Discuss (13 decisions) · Specify (7 stories, 38 EARS criteria) · Design · Tasks (33) · Execute (32 tasks, 4 batches) · Validate (2 Verifier rounds, round 2 PASS)
 - **In-progress** (file:line): none
@@ -64,8 +64,13 @@ bold line, or `---`. Verified A/B against a deliberately non-testable criterion.
    the approved Test Coverage Matrix. The build gate proves those documents
    exist, not that they are correct.
 
-### Housekeeping
+### Install
 
-The checkout directory is `tlc-tasks-loop`; the skill is named `tlc-loop-tasks`
-everywhere else. Rename the directory before symlinking it into
-`~/.claude/skills/`.
+The skill resolves its sibling with `realpath`, so a symlink pointing out of the
+skills directory does not work: `_paths.tlc_dir()` would look for
+`tlc-spec-driven` next to the symlink target. The skill must live beside it.
+
+```bash
+mv <checkout> ~/.agents/skills/tlc-loop
+ln -s ../../.agents/skills/tlc-loop ~/.claude/skills/tlc-loop
+```

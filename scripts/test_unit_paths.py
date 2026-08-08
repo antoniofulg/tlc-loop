@@ -28,8 +28,8 @@ def _load(path):
 
 
 def _layout(base, with_sibling=True):
-    """Create <base>/skills/tlc-loop-tasks/scripts/_paths.py (+ optional sibling)."""
-    loop_scripts = os.path.join(base, "skills", "tlc-loop-tasks", "scripts")
+    """Create <base>/skills/tlc-loop/scripts/_paths.py (+ optional sibling)."""
+    loop_scripts = os.path.join(base, "skills", "tlc-loop", "scripts")
     os.makedirs(loop_scripts)
     shutil.copyfile(REAL_PATHS_PY, os.path.join(loop_scripts, "_paths.py"))
     if with_sibling:
@@ -44,16 +44,16 @@ class SkillDirResolution(unittest.TestCase):
     def test_resolves_from_a_real_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             mod = _load(_layout(tmp))
-            expected = os.path.realpath(os.path.join(tmp, "skills", "tlc-loop-tasks"))
+            expected = os.path.realpath(os.path.join(tmp, "skills", "tlc-loop"))
             self.assertEqual(mod.skill_dir(), expected)
 
     def test_resolves_through_a_symlinked_entry(self):
         with tempfile.TemporaryDirectory() as tmp:
             _layout(tmp)
-            link = os.path.join(tmp, "linked-tlc-loop-tasks")
-            os.symlink(os.path.join(tmp, "skills", "tlc-loop-tasks"), link)
+            link = os.path.join(tmp, "linked-tlc-loop")
+            os.symlink(os.path.join(tmp, "skills", "tlc-loop"), link)
             mod = _load(os.path.join(link, "scripts", "_paths.py"))
-            expected = os.path.realpath(os.path.join(tmp, "skills", "tlc-loop-tasks"))
+            expected = os.path.realpath(os.path.join(tmp, "skills", "tlc-loop"))
             self.assertEqual(mod.skill_dir(), expected)
 
 
@@ -67,8 +67,8 @@ class TlcDirResolution(unittest.TestCase):
     def test_sibling_found_through_a_symlinked_entry(self):
         with tempfile.TemporaryDirectory() as tmp:
             _layout(tmp)
-            link = os.path.join(tmp, "linked-tlc-loop-tasks")
-            os.symlink(os.path.join(tmp, "skills", "tlc-loop-tasks"), link)
+            link = os.path.join(tmp, "linked-tlc-loop")
+            os.symlink(os.path.join(tmp, "skills", "tlc-loop"), link)
             mod = _load(os.path.join(link, "scripts", "_paths.py"))
             expected = os.path.realpath(os.path.join(tmp, "skills", "tlc-spec-driven"))
             self.assertEqual(mod.tlc_dir(), expected)

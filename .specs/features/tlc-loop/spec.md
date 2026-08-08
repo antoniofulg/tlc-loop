@@ -1,4 +1,4 @@
-# tlc-loop-tasks Specification
+# tlc-loop Specification
 
 ## Problem Statement
 

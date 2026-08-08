@@ -1,4 +1,4 @@
-# tlc-loop-tasks - iteration {{ iteration }}
+# tlc-loop - iteration {{ iteration }}
 
 - **Feature:** {{ feature }}
 - **Phase in:** {{ phase_in }} -> **Phase out:** {{ phase_out }}

@@ -98,7 +98,7 @@ if [ -z "$feature" ]; then
 fi
 
 if [ -z "$LOOP_PROMPT" ]; then
-    LOOP_PROMPT="Use the tlc-loop-tasks skill to continue the loop for feature ${feature} in ${root}: detect the phase, run exactly one phase action, then continue."
+    LOOP_PROMPT="Use the tlc-loop skill to continue the loop for feature ${feature} in ${root}: detect the phase, run exactly one phase action, then continue."
 fi
 
 # codex writes its result to a file rather than a stream, so the resolver needs

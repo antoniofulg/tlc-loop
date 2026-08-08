@@ -1,4 +1,4 @@
-# Contexto: tlc-loop-tasks
+# Contexto: tlc-loop
 
 Registro das decisões tomadas na fase de discussão. Cada entrada traz a decisão,
 o motivo, as alternativas descartadas e — quando aplicável — a evidência que a
@@ -35,7 +35,7 @@ Adaptação do skill `cy-loop-tasks` (Compozy,
 
 ### D1 — Skill irmão, não fork nem fold-in
 
-**Decisão.** Criar `tlc-loop-tasks` como skill separado que dirige o
+**Decisão.** Criar `tlc-loop` como skill separado que dirige o
 `tlc-spec-driven` sem substituí-lo, mais um gancho pequeno no `implement.md`
 transformando a oferta atual (inline vs sub-agents) numa escolha de três vias:
 inline / sub-agents / loop.
@@ -390,6 +390,33 @@ ilimitado.
 
 **Descoberto durante o planejamento de tasks**, não na discussão — é o tipo de
 simplificação que só aparece ao enumerar o trabalho real.
+
+---
+
+### D14 — Nome: `tlc-loop`, não `tlc-loop-tasks`
+
+**Decisão.** O skill e o diretório da feature chamam-se `tlc-loop`. Commits
+anteriores a esta decisão citam `tlc-loop-tasks`; isso é histórico, não
+inconsistência.
+
+**Por quê.** O nome herdado do `cy-loop-tasks` descrevia o desenho **pré-D4**.
+No cy, "tasks" era exato: a Fase B executava uma task por iteração. A D4 trocou
+a unidade de iteração para o batch de fases, e o nome não acompanhou. Além
+disso, `tasks.md` é vocabulário do `tlc-spec-driven` — nomear o executor pelo
+artefato do planejador borra a fronteira que a D1 traçou.
+
+Sintoma: a própria frontmatter escrita durante a T21 lista seis triggers, e
+quatro dizem *loop*; nenhum diz *tasks* sozinho.
+
+**Custo.** Baixo, porque o código de produção nunca se nomeia — `_paths.py`
+descobre onde está via `dirname(realpath(__file__))`. As 40 ocorrências viviam
+em frontmatter, fixtures de teste, assets e docs. Os 321 testes seguiram verdes.
+
+**Alternativas descartadas.** `tlc-driver` (compartilha a raiz "driv" com
+`spec-driven`, convidando confusão justamente entre os dois skills que nunca
+podem ser trocados); `tlc-autopilot` (promete mais autonomia do que existe — a
+coisa para em 8 condições e espera aval em blast radius); `tlc-execute` (meia
+verdade: cobre Execute **e** Validate).
 
 ---
 

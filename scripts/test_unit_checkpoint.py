@@ -62,7 +62,7 @@ class CheckpointCase(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         base = self.tmp.name
 
-        self.skill_scripts = os.path.join(base, "skills", "tlc-loop-tasks", "scripts")
+        self.skill_scripts = os.path.join(base, "skills", "tlc-loop", "scripts")
         os.makedirs(self.skill_scripts)
         for name in os.listdir(SCRIPTS):
             if name.endswith(".py") and not name.startswith("test_"):

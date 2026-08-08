@@ -1,8 +1,8 @@
-# tlc-loop-tasks Validation
+# tlc-loop Validation
 
 **Date**: 2026-08-08
 **Round**: **2 of a maximum 3** (round 1 returned FAIL on three ranked gaps; T31/T32/T33 shipped as the fix round)
-**Spec**: `.specs/features/tlc-loop-tasks/spec.md`
+**Spec**: `.specs/features/tlc-loop/spec.md`
 **Diff range**: `12bd8c3..HEAD` (HEAD = `1cc1dd7`, 32 commits). Fix-round surface: `f4e2b30`, `639a202`, `1cc1dd7`.
 **Verifier**: independent sub-agent, round 2 — did not write the code, did not write the round-1 report. Coverage re-derived from `spec.md`; the round-1 report's conclusions were treated as claims to re-test, not as findings inherited.
 **Scope**: P1 stories only (LOOP-01..LOOP-06). LOOP-07 / T26 is deliberately not delivered and is recorded as such, not as a failure.
@@ -240,7 +240,7 @@ Round 1 reported 24 matched / 12 prose-only / 1 gap. The delta is exactly the on
 
 **Result**: **16/16 killed, 0 survived** — ✅
 
-**Isolation check (post-sensor)**: `git worktree list` → only `/Users/antoniofulg/Projects/tlc-tasks-loop  1cc1dd7 [main]`. `git status --porcelain` → empty, byte-identical to the pre-sensor baseline. `git rev-parse HEAD` → `1cc1dd7`. Real tree never mutated.
+**Isolation check (post-sensor)**: `git worktree list` → only `/Users/antoniofulg/Projects/tlc-loop  1cc1dd7 [main]`. `git status --porcelain` → empty, byte-identical to the pre-sensor baseline. `git rev-parse HEAD` → `1cc1dd7`. Real tree never mutated.
 
 ---
 

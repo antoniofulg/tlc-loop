@@ -1,4 +1,4 @@
-# tlc-loop-tasks Tasks
+# tlc-loop Tasks
 
 ## Execution Protocol (MANDATORY -- do not skip)
 
@@ -8,7 +8,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 ---
 
-**Design**: `.specs/features/tlc-loop-tasks/design.md`
+**Design**: `.specs/features/tlc-loop/design.md`
 **Status**: In Progress
 
 ---

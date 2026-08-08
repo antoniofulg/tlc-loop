@@ -64,7 +64,7 @@ so the equivalent is the objective handed to bootstrap:
 
 ```bash
 python3 <skill-dir>/scripts/init_loop.py <FEATURE> --root <root> \
-  --objective "Run the tlc-loop-tasks loop for feature <FEATURE> until the transcript contains the literal line __TLC_LOOP__ feature=<FEATURE> verify=PASS, or a phase=H action=halt line for that feature."
+  --objective "Run the tlc-loop loop for feature <FEATURE> until the transcript contains the literal line __TLC_LOOP__ feature=<FEATURE> verify=PASS, or a phase=H action=halt line for that feature."
 ```
 
 `objective` is written verbatim and is immutable for the rest of the run, so
