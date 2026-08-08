@@ -613,7 +613,7 @@ T28
 
 ---
 
-### T19: Portable shell driver
+### T19: Portable shell driver ✅
 
 **What**: The restart driver for harnesses without a native goal mechanism.
 **Where**: `scripts/loop.sh`
@@ -628,11 +628,18 @@ T28
 
 **Done when**:
 
-- [ ] The loop breaks on `phase=E` and on `phase=H`, printing the line it broke on
-- [ ] Any other phase line spawns the resolved respawn command
-- [ ] An unparseable detect line breaks the loop rather than spinning
-- [ ] `bash -n` passes
-- [ ] Integration tests drive it with a stubbed `detect_phase` and cover: terminate on E, terminate on H, one spawn then terminate, and the unparseable-line break
+- [x] The loop breaks on `phase=E` and on `phase=H`, printing the line it broke on
+- [x] Any other phase line spawns the resolved respawn command
+- [x] An unparseable detect line breaks the loop rather than spinning
+- [x] `bash -n` passes
+- [x] Integration tests drive it with a stubbed `detect_phase` and cover: terminate on E, terminate on H, one spawn then terminate, and the unparseable-line break
+
+> Exit codes separate the two terminals: `0` on `phase=E`, `1` on `phase=H`,
+> `2` on anything the driver cannot act on. Every non-actionable outcome - a
+> detect that fails, a respawn it cannot resolve, a respawn that exits non-zero
+> - breaks for the same reason as an unparseable line: the counters that would
+> eventually halt the run live in `loop.json`, and only the agent writes them,
+> so retrying from the shell advances nothing.
 
 **Tests**: integration
 **Gate**: full
