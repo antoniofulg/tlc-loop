@@ -232,10 +232,10 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| LOOP-01 | P1: Deterministic phase detection and resume | Design | Pending |
-| LOOP-02 | P1: Atomic checkpoint per task | Design | Pending |
-| LOOP-03 | P1: Self-healing repair loop | Design | Pending |
-| LOOP-04 | P1: Independent verification with bounded fix loop | Design | Pending |
-| LOOP-05 | P1: Per-stage provider, model, and effort | Design | Pending |
-| LOOP-06 | P1: Unattended continuation and stop conditions | Design | Pending |
-| LOOP-07 | P2: Handoff from tlc-spec-driven | Design | Pending |
+| LOOP-01 | P1: Deterministic phase detection and resume | Execute | Verified |
+| LOOP-02 | P1: Atomic checkpoint per task | Execute | Verified |
+| LOOP-03 | P1: Self-healing repair loop | Execute | Verified |
+| LOOP-04 | P1: Independent verification with bounded fix loop | Execute | Verified |
+| LOOP-05 | P1: Per-stage provider, model, and effort | Execute | Verified |
+| LOOP-06 | P1: Unattended continuation and stop conditions | Execute | Verified |
+| LOOP-07 | P2: Handoff from tlc-spec-driven | Tasks | Not delivered (T26 awaiting go-ahead) |
