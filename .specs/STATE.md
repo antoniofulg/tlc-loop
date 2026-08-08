@@ -2,43 +2,70 @@
 
 ## Decisions
 
-_No project-level decisions recorded yet. Design has not promoted any to project
-scope; feature-level decisions live in
-`.specs/features/tlc-loop-tasks/context.md` (D1..D13)._
+_No project-level decisions promoted to project scope. Feature-level decisions
+live in `.specs/features/tlc-loop-tasks/context.md` (D1..D13)._
 
 ## Handoff
 
 - **Feature**: tlc-loop-tasks (`.specs/features/tlc-loop-tasks/`)
-- **Phase / Task**: Planning complete. Awaiting task approval before Execute.
-- **Completed**: Discuss (13 decisions), Specify (7 stories, 38 EARS criteria, LOOP-01..07 — gate passes with criteria inspected), Design (architecture chosen, components, schemas, adapter table, risks), Tasks (27 tasks across 7 phases — `validate_tasks.py` 0 errors).
+- **Phase / Task**: Complete for the P1 group. `validate_state.py` exits 0.
+- **Completed**: Discuss (13 decisions) · Specify (7 stories, 38 EARS criteria) · Design · Tasks (33) · Execute (32 tasks, 4 batches) · Validate (2 Verifier rounds, round 2 PASS)
 - **In-progress** (file:line): none
-- **Next step**: User approves `tasks.md`, then choose the Execute mode (inline / phase-batch sub-agents / loop). 27 tasks pack into 4 batches: T1-T9, T10-T17, T18-T24, T25-T27.
+- **Next step**: Two decisions await the user, both outside this repository — see Pending below. Nothing in this repo is blocked.
 - **Blockers**: none
-- **Uncommitted files**: `.specs/` (untracked — no commit yet)
-- **Branch**: main (no commits)
+- **Uncommitted files**: none
+- **Branch**: main, 34 commits, clean worktree
 
-### Side work done this session
+### Delivered
 
-Fixed a false-negative in `~/.claude/skills/tlc-spec-driven/scripts/validate_spec.py`:
-a blank line between the `**Acceptance Criteria**:` header and the first numbered
-item closed the parser's AC block, so every spec written from the skill's own
-template passed the acceptance-criteria gate without any criterion being checked.
-Blank lines are now skipped; the block closes on a heading, a bold line, or `---`.
-Verified A/B against a spec carrying a deliberately non-testable criterion: old
-code exited 0, fixed code exits 1 and names the line. T25 mutation-tests the
-remaining three validators for the same class of defect.
+`SKILL.md` · 12 scripts under `scripts/` · 7 references · 3 assets · 321 tests.
+Requirements LOOP-01 through LOOP-06 verified with `file:line` evidence.
+LOOP-07 not delivered (task T26).
 
-### Verified during planning
+Task completion is recorded as git trailers, per D3. Read it back with:
 
-- git trailers: `git commit --trailer` writes, `%(trailers:key=Task,valueonly)` reads back only real entries, `check_commit.py` accepts the message (git 2.50.1)
-- `tomllib` is stdlib on Python 3.14.6 — removed a hand-written YAML reader plus emitter from the design (D13)
-- CLI flags for `codex exec`, `cursor-agent`, and `claude -p`; `codex` has no `--effort` or `--agent` flag, effort goes through `-c model_reasoning_effort=`
-- Claude Code `/goal` exists and is documented; its evaluator reads the transcript and cannot run commands, which is why the done-signature exists
-- `pytest`, `ruff`, and `shellcheck` are not installed — tests use stdlib `unittest`
+```
+git log --format="%(trailers:key=Task,valueonly)"
+```
 
-### Open verification debts
+### Pending user decisions (both edit files outside this repo)
 
-1. Environment markers for `codex` and `cursor-agent` — owned by T14.
-2. Whether `cursor-agent` has any native continuation mechanism — probed in T14.
-3. Exact `/goal` condition text against the real evaluator — owned by T20.
-4. That the `no_diff_tasks` union produces no false positive after a rebase — owned by T11 and T27.
+1. **T26 / LOOP-07** — extend the Execute delegation offer in
+   `~/.agents/skills/tlc-spec-driven/references/implement.md` from two options
+   (inline, sub-agents) to three (adding loop mode). Without it the loop works
+   but is never suggested at the end of the Tasks phase.
+2. **Two defects found in `tlc-spec-driven`, documented but not fixed.** Both
+   affect every feature planned with that skill, not only this one:
+   - `validate_tasks.py` attributes every task to the last `### Phase N`
+     heading, so under the standard template its forward-dependency check
+     cannot fail. Reproduced independently: a task in Phase 1 depending on a
+     task in Phase 2 returns 0 errors.
+   - The batching example in `sub-agents.md` does not reproduce under its own
+     literal rule — `[8,2,2,8]` collapses to two batches, while the document
+     claims three. `scripts/_batching.py` adds a 1.5x-budget guard to match the
+     documented counts.
+
+### Already fixed in `tlc-spec-driven` this session
+
+`validate_spec.py` skipped every acceptance-criterion check when a blank line
+sat between the `**Acceptance Criteria**:` header and the first item — which the
+skill's own template produces. Every spec written from that template passed the
+AC gate vacuously. Blank lines are now skipped; the block closes on a heading, a
+bold line, or `---`. Verified A/B against a deliberately non-testable criterion.
+
+### Verification debts carried forward
+
+1. The `codex` environment marker is UNRESOLVED — the account hit its usage
+   limit during T14. `codex` does not auto-detect and must be named with
+   `--respawn`. Re-verification procedure in `references/provider-discovery.md`.
+2. The `/goal` condition text in `assets/goal-condition.template.md` has not
+   been exercised against the real evaluator.
+3. 11 P1 criteria are agent-facing prose with no executable assertion, matching
+   the approved Test Coverage Matrix. The build gate proves those documents
+   exist, not that they are correct.
+
+### Housekeeping
+
+The checkout directory is `tlc-tasks-loop`; the skill is named `tlc-loop-tasks`
+everywhere else. Rename the directory before symlinking it into
+`~/.claude/skills/`.
