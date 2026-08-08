@@ -725,7 +725,7 @@ T28
 
 ---
 
-### T22: Per-iteration checklist
+### T22: Per-iteration checklist ✅
 
 **What**: The self-audit checklist walked before printing each iteration summary.
 **Where**: `references/checklist.md`
@@ -740,10 +740,16 @@ T28
 
 **Done when**:
 
-- [ ] There is an every-iteration section plus one section per phase
-- [ ] Each item is checkable against an artifact or a command result, never against recollection
-- [ ] The author-is-not-verifier item appears in the verify section
-- [ ] No item references a phase or script this skill does not have
+- [x] There is an every-iteration section plus one section per phase
+- [x] Each item is checkable against an artifact or a command result, never against recollection
+- [x] The author-is-not-verifier item appears in the verify section
+- [x] No item references a phase or script this skill does not have
+
+> Section parity checked mechanically: `Every iteration` plus one section for
+> each of the six phases `0`, `B`, `V`, `F`, `E`, `H`. Every `.py` named in the
+> file was resolved to either this skill's `scripts/` or the sibling's -
+> nothing dangling. Every box carries the artifact, file, or exit code that
+> settles it, so no box can be closed from recollection.
 
 **Tests**: none
 **Gate**: build
