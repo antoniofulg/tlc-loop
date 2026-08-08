@@ -185,7 +185,7 @@ T26
 
 ---
 
-### T4: Document the config schema
+### T4: Document the config schema ✅
 
 **What**: Reference documenting every `loop.config.toml` key, its default, and the unlimited-by-omission rule.
 **Where**: `references/config-schema.md`
@@ -200,10 +200,10 @@ T26
 
 **Done when**:
 
-- [ ] Every key implemented in T3 appears with its type, default, and meaning
-- [ ] The config-versus-state separation rule is stated: the loop reads this file and never writes it
-- [ ] The TOML-has-no-null convention is documented
-- [ ] No key is documented that T3 does not implement
+- [x] Every key implemented in T3 appears with its type, default, and meaning
+- [x] The config-versus-state separation rule is stated: the loop reads this file and never writes it
+- [x] The TOML-has-no-null convention is documented
+- [x] No key is documented that T3 does not implement
 
 **Tests**: none
 **Gate**: build
