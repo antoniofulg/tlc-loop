@@ -344,7 +344,7 @@ T28
 
 ---
 
-### T10: State mutation entrypoint
+### T10: State mutation entrypoint ✅
 
 **What**: The only mutator of `loop.json` after bootstrap, including the runaway counters.
 **Where**: `scripts/update_loop.py`
@@ -359,12 +359,12 @@ T28
 
 **Done when**:
 
-- [ ] `--iteration-done` increments `iteration` exactly once per invocation
-- [ ] `iterations[]` is append-only and capped at the last 50 entries
-- [ ] A write targeting `objective` is rejected with a non-zero exit
-- [ ] `--task-done`, `--gate-attempt`, and `--verify-round` update the counters the halt conditions read
-- [ ] `iterations_without_commit` resets on a recorded commit and increments otherwise
-- [ ] Unit tests cover: the increment, the 50-entry cap, the immutable-objective rejection, and both counter transitions
+- [x] `--iteration-done` increments `iteration` exactly once per invocation
+- [x] `iterations[]` is append-only and capped at the last 50 entries
+- [x] A write targeting `objective` is rejected with a non-zero exit
+- [x] `--task-done`, `--gate-attempt`, and `--verify-round` update the counters the halt conditions read
+- [x] `iterations_without_commit` resets on a recorded commit and increments otherwise
+- [x] Unit tests cover: the increment, the 50-entry cap, the immutable-objective rejection, and both counter transitions
 
 **Tests**: unit
 **Gate**: quick
