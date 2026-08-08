@@ -522,7 +522,7 @@ T28
 
 ---
 
-### T16: Stage resolution entrypoint
+### T16: Stage resolution entrypoint ✅
 
 **What**: Turn a configured stage into a concrete invocation, rejecting unsupported effort before dispatch.
 **Where**: `scripts/resolve_stage.py`
@@ -537,12 +537,19 @@ T28
 
 **Done when**:
 
-- [ ] `--stage <name>` prints either `kind=agent` with model and effort, or `kind=command` with the full command line
-- [ ] A provider equal to the detected running harness resolves to `kind=agent`
-- [ ] An effort value the target provider does not accept exits non-zero naming the stage, the provider, and the accepted values
-- [ ] `--validate` checks every configured stage and exits non-zero listing all offenders at once
-- [ ] Placeholders for repo path and evidence file are substituted, never left literal
-- [ ] Unit tests cover: each provider's command line, the native-agent path, a rejected effort, and `--validate` with multiple offenders
+- [x] `--stage <name>` prints either `kind=agent` with model and effort, or `kind=command` with the full command line
+- [x] A provider equal to the detected running harness resolves to `kind=agent`
+- [x] An effort value the target provider does not accept exits non-zero naming the stage, the provider, and the accepted values
+- [x] `--validate` checks every configured stage and exits non-zero listing all offenders at once
+- [x] Placeholders for repo path and evidence file are substituted, never left literal
+- [x] Unit tests cover: each provider's command line, the native-agent path, a rejected effort, and `--validate` with multiple offenders
+
+> **Spec-precision gap.** The per-provider effort rejection is asserted against
+> `check_effort` directly, not through the CLI, because no config-legal effort
+> can currently violate a built-in provider: `_config.EFFORTS` is `low..max`
+> and all three built-ins accept that whole set (codex is a superset). The
+> reachable CLI rejections - unknown provider and the cursor tier-suffix
+> conflict - are covered end to end.
 
 **Tests**: unit
 **Gate**: quick
