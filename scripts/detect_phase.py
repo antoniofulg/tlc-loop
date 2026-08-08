@@ -24,9 +24,11 @@ Output vocabulary (exactly one of these, on stdout):
     phase=E action=done
     phase=H action=halt reason=<slug> detail="<text>"
 
-A `phase=B` line also carries `reconciled=<ids>` when `tasks.md` ticks a task
-git does not confirm. It is advisory: git already decided, and the field exists
-so the orchestrator can record the override instead of it passing silently.
+Non-halt lines can trail advisory fields. `reconciled=<ids>` names tasks
+`tasks.md` ticks that git does not confirm; `dup=<ids>` names tasks whose
+`Task:` trailer appears on more than one commit. Both are advisory - git has
+already decided - and they exist so the orchestrator can record what it
+observed instead of it passing silently.
 
 An unreadable `loop.json` is not one of those failures: it is a halt with
 `reason=state_corrupt`, printed on stdout like any other phase line.
@@ -56,6 +58,15 @@ def _quote(text):
     """Render a halt detail as one double-quoted token."""
     flat = " ".join(str(text or "").split())
     return '"' + flat.replace('"', "'") + '"'
+
+
+def _line(core, notes):
+    """One line: the phase's own fields, then any advisory fields.
+
+    Halt lines never take notes. Their contract is `reason` plus `detail`, and
+    a halt is terminal - nothing follows that could act on an advisory field.
+    """
+    return " ".join([core, *notes])
 
 
 def _tasks_path(root, feature):
@@ -148,7 +159,7 @@ def main(argv=None):
     # 3. Git is authoritative for what is done; no_diff_tasks covers the tasks
     #    that legitimately produced no commit.
     try:
-        committed, _duplicates = _gitio.completed_tasks(root)
+        committed, duplicates = _gitio.completed_tasks(root)
     except _gitio.GitError as exc:
         print(f"detect_phase: {exc}", file=sys.stderr)
         return 1
@@ -174,6 +185,15 @@ def main(argv=None):
     if reconciled:
         notes.append(f"reconciled={','.join(reconciled)}")
 
+    # 4c. A rebase or cherry-pick can leave the same `Task:` trailer on two
+    #     commits. The task is complete either way and `_gitio` already counts
+    #     it once, but the ambiguity is a spec edge case that must be recorded,
+    #     not dropped - so it rides the line too. It is a property of history
+    #     rather than of the plan, so unlike `reconciled` it can appear on any
+    #     line derived after git is read.
+    if duplicates:
+        notes.append(f"dup={','.join(duplicates)}")
+
     # 5. Work remains: name the next batch and the exact tasks in it.
     pending = [task for task in planned if task["id"] not in done]
     if pending:
@@ -184,7 +204,7 @@ def main(argv=None):
             f"phase=B action=execute_batch batch={label} "
             f"tasks={','.join(batch['tasks'])}"
         )
-        print(" ".join([core, *notes]))
+        print(_line(core, notes))
         return 0
 
     # 6. Nothing pending. The sibling validator decides whether this is done.
@@ -199,7 +219,7 @@ def main(argv=None):
         text=True,
     )
     if finished.returncode == 0:
-        print("phase=E action=done")
+        print(_line("phase=E action=done", notes))
         return 0
 
     # 7. Not done, so another round is due - unless the configured budget for
@@ -217,9 +237,9 @@ def main(argv=None):
 
     # 8. Fix the gaps a FAIL round left open, else verify again.
     if verify.get("last_verdict") == "FAIL" and int(verify.get("gaps_open") or 0) > 0:
-        print(f"phase=F action=fix round={rounds}")
+        print(_line(f"phase=F action=fix round={rounds}", notes))
         return 0
-    print(f"phase=V action=verify round={rounds + 1}")
+    print(_line(f"phase=V action=verify round={rounds + 1}", notes))
     return 0
 
 

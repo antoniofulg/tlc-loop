@@ -41,10 +41,16 @@ Every line the implementation can print, with the condition that produces it.
 | --- | --- |
 | `phase=0 action=bootstrap` | `loop.json` does not exist for this feature. |
 | `phase=H action=halt reason=<slug> detail="<text>"` | A halt condition holds. Checked before any work is described. |
-| `phase=B action=execute_batch batch=<label> tasks=<ids> [reconciled=<ids>]` | At least one planned task is not yet done. |
+| `phase=B action=execute_batch batch=<label> tasks=<ids>` | At least one planned task is not yet done. |
 | `phase=E action=done` | Nothing pending and `validate_state.py` exits 0. |
 | `phase=F action=fix round=<N>` | Nothing pending, not done, the last verdict was `FAIL` and gaps are still open. |
 | `phase=V action=verify round=<N>` | Nothing pending, not done, and no open gaps to fix. |
+
+Every line except a halt can trail **advisory fields**: `reconciled=<ids>` then
+`dup=<ids>`, in that order, each present only when it has something to say.
+They report what the detector observed on the way to its answer - they never
+change the answer. A halt line never carries them: its contract is `reason`
+plus `detail`, and nothing follows a halt that could act on the observation.
 
 ### Field shapes
 
@@ -65,6 +71,10 @@ Every line the implementation can print, with the condition that produces it.
   still pending, so no other line can carry it. It is advisory - git has
   already decided and the task is in the batch like any other - and it exists
   so the override can be recorded rather than passing silently.
+- `dup=<ids>` lists, comma separated, the tasks whose `Task:` trailer appears
+  on more than one commit, each named once however many copies exist. It is a
+  property of history rather than of the plan, so it can ride any non-halt
+  line - including `phase=V` and `phase=E`, long after the last batch.
 - `reason=<slug>` is one of `no_progress`, `gate_stuck`, `executor`, `limit`,
   `blocker`, `blast_radius`, `state_corrupt`, `verify_exhausted`.
 - `detail="<text>"` is always present on a halt line, always double quoted,
@@ -122,7 +132,11 @@ such a task would be re-dispatched forever. It is additive only, and it can
 never mark a task incomplete that git says is complete.
 
 A duplicate `Task:` trailer, which a rebase or cherry-pick can leave behind,
-counts once. The duplication is reported rather than dropped.
+counts once. The duplication is reported rather than dropped: `_gitio` hands
+the ids back alongside the deduped ones, and they trail the line as
+`dup=<ids>`. Reporting is all that is owed - the task is complete either way,
+so the run continues - but a task id that shows up twice in history is a sign
+somebody rewrote commits, and the transcript says so.
 
 ### Absent state bootstraps, unreadable state halts
 

@@ -1101,10 +1101,10 @@ T30
 
 ---
 
-### T32: Report duplicate trailer ambiguity instead of dropping it
+### T32: Report duplicate trailer ambiguity instead of dropping it ✅
 
 **What**: Consume the duplicate-trailer signal `_gitio.completed_tasks` already returns, which `detect_phase.py` currently binds and discards.
-**Where**: `scripts/detect_phase.py`
+**Where**: `scripts/detect_phase.py`, `references/phase-transitions.md`
 **Depends on**: None
 **Reuses**: The duplicates list `_gitio.completed_tasks` already produces.
 **Requirement**: LOOP-02
@@ -1116,10 +1116,10 @@ T30
 
 **Done when**:
 
-- [ ] A duplicated `Task:` trailer is surfaced by `detect_phase.py`, not discarded
-- [ ] The task still counts as completed exactly once, per the spec edge case
-- [ ] `references/phase-transitions.md`'s claim that duplication is reported becomes true of the code
-- [ ] Unit tests cover: a duplicated trailer surfaced, and a clean history surfacing nothing
+- [x] A duplicated `Task:` trailer is surfaced by `detect_phase.py`, not discarded
+- [x] The task still counts as completed exactly once, per the spec edge case
+- [x] `references/phase-transitions.md`'s claim that duplication is reported becomes true of the code
+- [x] Unit tests cover: a duplicated trailer surfaced, and a clean history surfacing nothing
 
 **Tests**: unit
 **Gate**: quick

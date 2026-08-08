@@ -351,6 +351,91 @@ class Reconciliation(DetectPhaseCase):
         self.assertEqual(len(proc.stdout.splitlines()), 1, proc.stdout)
 
 
+class DuplicateTrailer(DetectPhaseCase):
+    """T32 / LOOP-02 edge case: a duplicated `Task:` trailer is reported.
+
+    A rebase or cherry-pick can leave the same trailer on two commits. The
+    spec requires both halves: the task counts as completed exactly once, and
+    the ambiguity is recorded rather than dropped.
+    """
+
+    def duplicate(self, task_id):
+        """Land a further commit carrying the same `Task:` trailer."""
+        self.copies = getattr(self, "copies", 0) + 1
+        name = f"{task_id.lower()}-again-{self.copies}.txt"
+        self.commit(f"fix: {task_id.lower()} again", name, task=task_id)
+
+    def test_a_duplicated_trailer_is_surfaced_and_counted_once(self):
+        self.write_state()
+        self.complete("T1")
+        self.duplicate("T1")
+        self.assertEqual(
+            self.line(),
+            "phase=B action=execute_batch batch=P1+P2 tasks=T2,T3,T4,T5,T6 dup=T1",
+        )
+
+    def test_every_duplicated_task_is_named(self):
+        self.write_state()
+        self.complete("T1", "T2")
+        self.duplicate("T1")
+        self.duplicate("T2")
+        self.assertTrue(self.line().endswith(" dup=T1,T2"), self.line())
+
+    def test_a_task_duplicated_three_times_is_named_once(self):
+        self.write_state()
+        self.complete("T1")
+        self.duplicate("T1")
+        self.duplicate("T1")
+        self.assertTrue(self.line().endswith(" dup=T1"), self.line())
+
+    def test_a_clean_history_surfaces_nothing(self):
+        self.write_state()
+        self.complete("T1", "T2", "T3")
+        self.assertNotIn("dup=", self.line())
+
+    def test_the_ambiguity_is_reported_on_a_line_that_is_not_a_batch(self):
+        # Duplication is a property of history, not of pending work, so it
+        # outlives the last batch.
+        self.write_state()
+        self.complete("T1", "T2", "T3", "T4", "T5", "T6")
+        self.duplicate("T3")
+        self.assertEqual(self.line(), "phase=V action=verify round=1 dup=T3")
+
+    def test_reporting_the_duplicate_writes_nothing(self):
+        self.write_state()
+        self.complete("T1")
+        self.duplicate("T1")
+        with open(self.state_path(), "rb") as fh:
+            state_before = fh.read()
+        porcelain_before = _git(self.root, "status", "--porcelain")
+        head_before = _git(self.root, "rev-parse", "HEAD")
+
+        self.assertIn("dup=T1", self.line())
+
+        with open(self.state_path(), "rb") as fh:
+            self.assertEqual(fh.read(), state_before)
+        self.assertEqual(_git(self.root, "status", "--porcelain"), porcelain_before)
+        self.assertEqual(_git(self.root, "rev-parse", "HEAD"), head_before)
+
+    def test_both_advisory_fields_share_one_line_in_a_fixed_order(self):
+        self.write_state()
+        self.complete("T1")
+        self.duplicate("T1")
+        # T2 is ticked in the plan but never committed: two independent
+        # observations, still exactly one line.
+        lines = [
+            line + " ✅" if line.startswith("### T2:") else line
+            for line in TASKS_MD.splitlines()
+        ]
+        with open(os.path.join(self.feature_dir, "tasks.md"), "w", encoding="utf-8") as fh:
+            fh.write("\n".join(lines) + "\n")
+        self.assertEqual(
+            self.line(),
+            "phase=B action=execute_batch batch=P1+P2 "
+            "tasks=T2,T3,T4,T5,T6 reconciled=T2 dup=T1",
+        )
+
+
 class Verify(DetectPhaseCase):
     def test_no_pending_and_no_report_prints_verify_round_one(self):
         self.write_state()
