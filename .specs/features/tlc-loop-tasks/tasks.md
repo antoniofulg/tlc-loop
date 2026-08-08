@@ -107,7 +107,7 @@ T26
 
 ## Task Breakdown
 
-### T1: Resolve sibling skill paths
+### T1: Resolve sibling skill paths ✅
 
 **What**: Module that resolves this skill's own directory and the sibling `tlc-spec-driven` directory through symlinks.
 **Where**: `scripts/_paths.py`
@@ -122,11 +122,11 @@ T26
 
 **Done when**:
 
-- [ ] `skill_dir()` returns this skill's directory resolved with `realpath`, correct when reached through a symlink
-- [ ] `tlc_dir()` returns the sibling `tlc-spec-driven` directory
-- [ ] `tlc_script(name)` returns the path to a named script under `<tlc>/scripts/`
-- [ ] A missing sibling raises with the attempted absolute path in the message, never a bare `FileNotFoundError`
-- [ ] Unit tests cover: resolution through a symlinked entry, resolution from a real path, and the missing-sibling error text
+- [x] `skill_dir()` returns this skill's directory resolved with `realpath`, correct when reached through a symlink
+- [x] `tlc_dir()` returns the sibling `tlc-spec-driven` directory
+- [x] `tlc_script(name)` returns the path to a named script under `<tlc>/scripts/`
+- [x] A missing sibling raises with the attempted absolute path in the message, never a bare `FileNotFoundError`
+- [x] Unit tests cover: resolution through a symlinked entry, resolution from a real path, and the missing-sibling error text
 
 **Tests**: unit
 **Gate**: quick
