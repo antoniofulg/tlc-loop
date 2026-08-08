@@ -822,7 +822,7 @@ T30
 
 ---
 
-### T25: Mutation-test the reused tlc validators
+### T25: Mutation-test the reused tlc validators ✅
 
 **What**: Confirm `validate_tasks.py`, `check_commit.py`, and `validate_state.py` actually reject invalid input, using the method that exposed the `validate_spec.py` false negative.
 **Where**: `scripts/test_int_tlc_validators.py`
@@ -837,10 +837,39 @@ T30
 
 **Done when**:
 
-- [ ] Each validator is fed at least one deliberately invalid input and asserted to exit non-zero
-- [ ] Each validator is fed a valid input and asserted to exit 0, so the test cannot pass by always failing
-- [ ] Any validator found to pass vacuously is reported in the test failure message with the input that slipped through
-- [ ] The tests skip cleanly with an explanatory message when the sibling skill is absent
+- [x] Each validator is fed at least one deliberately invalid input and asserted to exit non-zero
+- [x] Each validator is fed a valid input and asserted to exit 0, so the test cannot pass by always failing
+- [x] Any validator found to pass vacuously is reported in the test failure message with the input that slipped through
+- [x] The tests skip cleanly with an explanatory message when the sibling skill is absent
+
+> **`check_commit.py`: sound.** Rejects a prose header, an unknown type, an
+> uppercase description, a trailing period, a `!` with no `BREAKING CHANGE:`
+> footer, and an empty message.
+>
+> **`validate_state.py`: sound.** Rejects a missing report, a FAIL verdict, the
+> unfilled `[PASS | FAIL]` placeholder, a PASS citing no `file:line` evidence, a
+> verdict-free prose report, and an empty file.
+>
+> **`validate_tasks.py`: one defect plus one smaller gap.** The
+> forward-dependency check cannot fire on a file the standard template
+> produced. `parse_phase_membership` maps a task only when its `### TN:` header
+> follows a `### Phase N` header, and it never leaves phase mode, so the
+> template's flat Task Breakdown attributes every task to the last phase
+> heading in the file - one phase for everything, and `p_dep > p_here` is never
+> true. Measured, not argued: T1 in Phase 1 declaring `Depends on: T4` from
+> Phase 2 returns `0 error(s), 0 warning(s)`; the same dependency with tasks
+> defined inside their phase sections is correctly rejected. Second, `Tests:`
+> with no value satisfies the field-presence check, because the parsed `""` is
+> not `None`, and it does not trigger the `Tests: none` warning either.
+>
+> Both are pinned as characterization tests asserting the real behaviour, each
+> carrying a message telling a future reader to delete it once the sibling is
+> fixed. Fixing the sibling skill is out of this feature's scope.
+>
+> The sibling is resolved through `_paths` first and then the two documented
+> install roots, because a development checkout of this skill does not sit
+> beside its sibling. Absent everywhere, the tests skip listing every path
+> tried.
 
 **Tests**: integration
 **Gate**: full
