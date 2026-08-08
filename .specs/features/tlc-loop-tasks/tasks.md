@@ -497,7 +497,7 @@ T28
 
 ---
 
-### T15: Provider adapter table
+### T15: Provider adapter table ✅
 
 **What**: Reference table translating `provider` / `model` / `effort` into a concrete command line per provider.
 **Where**: `references/providers.md`
@@ -512,10 +512,10 @@ T28
 
 **Done when**:
 
-- [ ] Each provider has its invocation template, effort mechanism, and evidence-capture mechanism
-- [ ] Accepted effort values per provider come from T14, with unverified entries marked as such
-- [ ] It is stated that `ultra` is accepted by no provider
-- [ ] The rule that a provider equal to the running harness uses the native sub-agent path is documented
+- [x] Each provider has its invocation template, effort mechanism, and evidence-capture mechanism
+- [x] Accepted effort values per provider come from T14, with unverified entries marked as such
+- [x] It is stated that `ultra` is accepted by no provider
+- [x] The rule that a provider equal to the running harness uses the native sub-agent path is documented
 
 **Tests**: none
 **Gate**: build
