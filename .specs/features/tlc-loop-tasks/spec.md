@@ -73,9 +73,10 @@ it, restart is guesswork and unattended execution is impossible.
 
 1. WHEN the loop is invoked for a feature THEN the system SHALL print exactly one phase line describing the next action before performing any work
 2. WHEN deriving completed tasks THEN the system SHALL read git trailers via `git log --format="%(trailers:key=Task,valueonly)"` and treat that result as authoritative over `loop.json`
-3. IF `loop.json` is absent or unparseable THEN the system SHALL reconstruct the phase from git history and `tasks.md` rather than failing the run
-4. IF `tasks.md` and git history disagree about a task THEN the system SHALL treat git as the source of truth and record the reconciliation in `loop.json`
-5. The system SHALL mutate `loop.json` only through its own state-writing script, never by hand-editing or by another writer
+3. IF `loop.json` is absent THEN the system SHALL reconstruct the phase from git history and `tasks.md` rather than failing the run
+4. IF `loop.json` exists but is unparseable THEN the system SHALL halt with `phase=H reason=state_corrupt` rather than reconstructing, because reconstruction would silently discard the immutable objective
+5. IF `tasks.md` and git history disagree about a task THEN the system SHALL treat git as the source of truth and record the reconciliation in `loop.json`
+6. The system SHALL mutate `loop.json` only through its own state-writing script, never by hand-editing or by another writer
 
 **Independent Test**: Delete `loop.json` mid-feature, re-invoke the loop, and confirm it names the same next task that git history implies.
 

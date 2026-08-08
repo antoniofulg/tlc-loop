@@ -143,7 +143,7 @@ still defines what a task cycle is.
 - **Interfaces**:
   - `load(feature: str, root: str) -> dict` — parse and schema-validate; raises on malformed
   - `save(feature: str, root: str, state: dict) -> None` — atomic write (temp + rename)
-  - `new_state(feature, objective, harness, config_snapshot) -> dict`
+  - `new_state(feature, objective, harness) -> dict`
 - **Dependencies**: stdlib `json` only. No hand-written parser: state is JSON, config is TOML via stdlib `tomllib`.
 - **Reuses**: `cy-loop-tasks/_state_io.py` structure.
 - **Note**: imported, never invoked directly.
@@ -389,7 +389,7 @@ Accepted `effort` values per provider:
 | Executor CLI missing / auth expired / quota | `phase=H reason=executor` with the command named | Change provider in config, re-invoke |
 | Executor claims done without evidence | Phase stays open; evidence re-collected or lane re-run | Nothing; the run continues |
 | Executor commits despite the ban | Phase stays open, work preserved, checkpoint ownership repaired | Reported, run does not advance |
-| `loop.json` malformed | `_state_io` raises; `detect_phase.py` exits 1 with the parse error | Loud failure, never silent corruption |
+| `loop.json` malformed | `_state_io` raises; `detect_phase.py` prints `phase=H reason=state_corrupt` with the parse error as detail | Loud halt in the same phase vocabulary, never silent reconstruction — rebuilding would discard the immutable objective |
 | `loop.json` deleted | Rebuilt from git + `tasks.md`; counters and objective lost | Run resumes at the right task |
 | Uncommitted changes mapping to no task | `phase=H reason=blocker` | Stops and asks; never discards |
 | Duplicate `Task:` trailer after rebase | Deduped, first commit wins, ambiguity recorded | Nothing |

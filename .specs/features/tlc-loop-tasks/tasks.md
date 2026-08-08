@@ -101,6 +101,7 @@ T24
 ```
 T25 -> T27
 T26
+T28
 ```
 
 ---
@@ -802,3 +803,29 @@ T26
 
 **Tests**: integration
 **Gate**: full
+
+---
+
+### T28: Halt on corrupt state instead of exiting raw
+
+**What**: Make `detect_phase.py` report an unparseable `loop.json` as `phase=H reason=state_corrupt` rather than a bare non-zero exit.
+**Where**: `scripts/detect_phase.py`
+**Depends on**: None
+**Reuses**: The halt vocabulary already implemented for the other halt reasons.
+**Requirement**: LOOP-01
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [ ] An unparseable `loop.json` prints `phase=H action=halt reason=state_corrupt` with the parse error as `detail`
+- [ ] An absent `loop.json` still reconstructs from git and `tasks.md`, unchanged
+- [ ] Every consumer of the detect contract sees one vocabulary: no caller needs to special-case a raw exit code
+- [ ] `references/phase-transitions.md` documents `state_corrupt` alongside the other halt reasons
+- [ ] Unit tests cover both branches: absent reconstructs, corrupt halts with the reason
+
+**Tests**: unit
+**Gate**: quick
