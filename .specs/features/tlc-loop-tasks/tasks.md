@@ -403,7 +403,7 @@ T28
 
 ---
 
-### T12: Bootstrap entrypoint
+### T12: Bootstrap entrypoint ✅
 
 **What**: Validate preconditions, detect the harness, and write the initial `loop.json` exactly once.
 **Where**: `scripts/init_loop.py`
@@ -418,12 +418,16 @@ T28
 
 **Done when**:
 
-- [ ] Each precondition failure exits non-zero naming which one failed: not a git repo, missing `tasks.md`, `validate_tasks.py` non-zero, unparseable config
-- [ ] Harness detection resolves from environment markers and records the result in `harness_resolved`
-- [ ] Inconclusive detection with no explicit `respawn.provider` exits non-zero asking rather than guessing
-- [ ] `objective` is written verbatim from the invocation and never derived
-- [ ] Re-running against an existing `loop.json` refuses rather than overwriting
-- [ ] Unit tests cover every precondition failure, successful bootstrap, inconclusive detection, and the re-run refusal
+- [x] Each precondition failure exits non-zero naming which one failed: not a git repo, missing `tasks.md`, `validate_tasks.py` non-zero, unparseable config
+- [x] Harness detection resolves from environment markers and records the result in `harness_resolved`
+- [x] Inconclusive detection with no explicit `respawn.provider` exits non-zero asking rather than guessing
+- [x] `objective` is written verbatim from the invocation and never derived
+- [x] Re-running against an existing `loop.json` refuses rather than overwriting
+- [x] Unit tests cover every precondition failure, successful bootstrap, inconclusive detection, and the re-run refusal
+
+> `HARNESS_MARKERS` carries only markers verified from inside the harness:
+> `claude` and `cursor`. `codex` has no entry because T14 could not probe it,
+> so codex is named with `--respawn` and never guessed.
 
 **Tests**: unit
 **Gate**: quick
