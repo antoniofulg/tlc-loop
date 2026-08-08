@@ -1,6 +1,6 @@
 ---
 name: tlc-loop
-description: Unattended execution loop that drives an approved tlc-spec-driven tasks.md from the first task to a verified PASS. Deterministic phase detection derived from git commit trailers, batch dispatch to per-stage configurable providers, one atomic commit per task, a self-healing repair loop, an independent Verifier, and recorded stop conditions instead of silent stalls. An interrupted run resumes correctly because the phase is re-derived from git, never stored. Use when (1) executing and validating a feature unattended, (2) resuming an interrupted loop run, (3) pairing a cheap implementer with a high-reasoning verifier across vendors. Triggers on "run the loop", "loop tasks", "execute unattended", "drive tasks.md to completion", "resume the loop", "continue the loop". Do NOT use for a single task, for a feature with no formal tasks.md, or for Specify, Design, or Tasks authoring - those stay interactive in tlc-spec-driven.
+description: Unattended execution loop for an approved tlc-spec-driven tasks.md: detects the phase from git commit trailers, dispatches batches to per-stage configurable providers, commits each task atomically, repairs its own failures, and halts with a recorded reason instead of stalling. Use when running a formal tasks.md to a verified PASS without per-batch prompting, or resuming a run that was interrupted. Another skill reaches it when tlc-spec-driven delegates Execute to loop mode. Triggers on "run the loop" and "resume the loop". Do NOT use for a single task, for a feature with no formal tasks.md, or for Specify, Design, or Tasks authoring - those stay interactive in tlc-spec-driven.
 license: CC-BY-4.0
 metadata:
   version: 0.1.0
@@ -60,8 +60,8 @@ bootstrap. Never hand-edit `loop.json`, and never commit outside
 `checkpoint.py`.
 
 **An executor never commits, and its evidence is never trusted.** Both rules
-are stated verbatim in every payload. See
-[executors.md](references/executors.md).
+are stated verbatim in every payload. Read
+[executors.md](references/executors.md) in full before building any payload.
 
 **Gate first, record second.** A `Task:` trailer means the gate passed. Never
 weaken an assertion, delete a test, or skip one to get a gate green, and never
@@ -107,9 +107,9 @@ network, no model calls.
 | `init_loop.py` | bootstrap; writes `loop.json` exactly once | 0 |
 | `detect_phase.py` | read-only; prints the next action | every iteration |
 | `update_loop.py` | the only mutator of `loop.json` | every iteration |
-| `checkpoint.py` | the atomic per-task commit and its trailers | B, F |
-| `resolve_stage.py` | turns a configured stage into a concrete invocation | B, V, F |
-| `loop.sh` | portable restart driver across turns | continuation |
+| `checkpoint.py` | mutating; the atomic per-task commit and its trailers | B, F |
+| `resolve_stage.py` | read-only; turns a configured stage into a concrete invocation | B, V, F |
+| `loop.sh` | mutating; spawns the respawn agent across turns | continuation |
 | `_paths` `_state_io` `_config` `_gitio` `_tasksmd` `_batching` | support modules | imported, never invoked |
 
 From the sibling `tlc-spec-driven`, resolved through `_paths.tlc_script()`:
