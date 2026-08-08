@@ -1,0 +1,169 @@
+# Phase transitions
+
+The contract of `scripts/detect_phase.py`: what it can print, when it prints
+it, and what has to become true before the loop leaves each phase.
+
+```
+detect_phase.py <feature> [--root DIR]
+```
+
+Run it at the start of every iteration and do what the line says.
+
+---
+
+## Two properties the rest of the contract rests on
+
+### It prints exactly one line
+
+One invocation, one line on stdout, always from the vocabulary below. Never
+zero lines, never two. A run that cannot describe the situation prints nothing
+on stdout, writes the reason to stderr, and exits 1.
+
+### It writes nothing
+
+No file is created or modified, no commit is made, no counter is bumped.
+`git status --porcelain` and `loop.json` are byte-identical before and after,
+so the script is safe to run for inspection at any moment, as many times as you
+like. Counters are advanced by `update_loop.py`, never here.
+
+The consequence worth internalising: **there is no stored current phase.** The
+phase is re-derived from evidence on every run. That is what makes an
+interrupted run resume correctly, and why deleting `loop.json` costs counters
+and the objective but never task progress.
+
+---
+
+## Output vocabulary
+
+Every line the implementation can print, with the condition that produces it.
+
+| Line | Entry condition |
+| --- | --- |
+| `phase=0 action=bootstrap` | `loop.json` does not exist for this feature. |
+| `phase=H action=halt reason=<slug> detail="<text>"` | A halt condition holds. Checked before any work is described. |
+| `phase=B action=execute_batch batch=<label> tasks=<ids>` | At least one planned task is not yet done. |
+| `phase=E action=done` | Nothing pending and `validate_state.py` exits 0. |
+| `phase=F action=fix round=<N>` | Nothing pending, not done, the last verdict was `FAIL` and gaps are still open. |
+| `phase=V action=verify round=<N>` | Nothing pending, not done, and no open gaps to fix. |
+
+### Field shapes
+
+- `batch=<label>` is the batch's phases joined with `+`: `P1`, `P1+P2`,
+  `P3+P4+P5`. A batch always holds consecutive whole phases.
+- `tasks=<ids>` is the batch's task ids, comma separated, no spaces:
+  `T1,T2,T3`. The ids are explicit on purpose. Phase labels alone become
+  ambiguous the moment `tasks.md` is edited, and the transcript is what an
+  external evaluator reads.
+- `round=<N>` on `phase=V` is the verify round about to run:
+  `verify.rounds + 1`.
+- `round=<N>` on `phase=F` is the round whose gaps are being fixed:
+  `verify.rounds`. A fix belongs to the round that found the gaps, so `V round=2`
+  following `F round=1` reads as one cycle rather than two.
+- `reason=<slug>` is one of `no_progress`, `gate_stuck`, `executor`, `limit`,
+  `blocker`, `blast_radius`.
+- `detail="<text>"` is always present on a halt line, always double quoted,
+  always a single line. Internal double quotes become single quotes and runs of
+  whitespace collapse, so the line stays parseable by a shell driver.
+
+---
+
+## Derivation order
+
+Each step runs only if the previous one did not print. This order is the
+contract, not an implementation detail.
+
+1. **No `loop.json`** → `phase=0`. Nothing else is read.
+2. **Load `loop.json` and `loop.config.toml`.** Either failing to parse exits 1.
+3. **Halt check** → `phase=H`. See the precedence below.
+4. **Derive what is done.** `git log --reverse --format="%(trailers:key=Task,valueonly)"`,
+   deduped, unioned with `no_diff_tasks` from `loop.json`.
+5. **Derive the plan.** Task ids and phases parsed from `tasks.md`. A missing
+   `tasks.md` exits 1.
+6. **`pending = planned - done`.** Non-empty → `phase=B`, packing the pending
+   tasks into batches of whole phases up to `execute.batch_size` and naming the
+   first one.
+7. **Ask the validator.** `validate_state.py` exiting 0 → `phase=E`.
+8. **Otherwise** → `phase=F` when the last verdict was `FAIL` with
+   `gaps_open > 0`, else `phase=V`.
+
+### Git wins over state
+
+Step 4 is the one to be precise about. Commit trailers are authoritative. When
+`loop.json` and git disagree about a task, git decides and `loop.json` is
+treated as the stale side. A task recorded as `current_task` in state but
+already carrying a `Task:` trailer in git is **done**, not in flight.
+
+`no_diff_tasks` is not an exception to this rule. It is the one piece of
+completion state git cannot express: a config-only or docs-only task that
+legitimately produced no commit, and therefore no trailer. Without the union
+such a task would be re-dispatched forever. It is additive only, and it can
+never mark a task incomplete that git says is complete.
+
+A duplicate `Task:` trailer, which a rebase or cherry-pick can leave behind,
+counts once. The duplication is reported rather than dropped.
+
+### Halt is checked first
+
+Step 3 sits ahead of every derivation that describes work. A run that must stop
+must not first be told to execute a batch, because the line the loop acts on is
+the line it prints. Ordering the halt check last would mean a halted run still
+dispatches one more batch.
+
+Within the halt check the order is fixed, so the answer is reproducible:
+
+1. A halt already recorded in `loop.json` (`halt.reason` is set). Its reason and
+   detail are printed verbatim.
+2. `status` is `blocked` → `blocker`.
+3. `iterations_without_commit` has reached `limits.no_progress_iterations` →
+   `no_progress`.
+4. Any task's gate attempts exceed `limits.gate_attempts_per_task` →
+   `gate_stuck`, naming the task.
+5. `iteration` has reached `limits.max_iterations` → `limit`.
+6. Elapsed time has reached `limits.max_minutes` → `limit`.
+
+**A limit absent from the config is unlimited and never fires.** TOML has no
+`null`, so omission is the only way to express "no limit", and a detector whose
+limit is unset is skipped entirely rather than defaulted to some number.
+
+---
+
+## Exit rules per phase
+
+What has to become true before detection stops returning the same line.
+
+| Phase | Leaves when |
+| --- | --- |
+| `0` | `init_loop.py` has written `loop.json`. The next detect re-derives from git, so bootstrap never decides what to work on. |
+| `B` | Every task in the batch carries a `Task:` trailer, or is recorded in `no_diff_tasks`. The batch is not "done" because a worker said so; it is done because the trailers exist. |
+| `V` | A verdict is recorded: `PASS` closes the feature, `FAIL` with open gaps moves to `F`. |
+| `F` | The gaps are consumed (`gaps_open` back to 0), which returns detection to `V` for a fresh round. |
+| `E` | Terminal. Nothing follows. Print the done-signature and stop. |
+| `H` | Terminal for this run. A halt clears only by a human resolving the cause and clearing `halt.reason`, or by changing the config that tripped a limit. Re-invoking without changing anything prints the same halt line. |
+
+`E` and `H` are the only terminal phases. Everything else re-enters detection.
+
+Two of these deserve emphasis:
+
+- **`B` never advances on a claim.** An executor reporting success is not
+  evidence. The trailer is. This is what makes the loop resumable after a crash
+  mid-batch: whatever was really committed stays done, and the rest is
+  re-derived as pending.
+- **`H` does not clear itself.** Halting is halting, not asking. With nobody
+  watching, a prompt is the same as a hang, so the run stops and records why.
+
+---
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | A line was printed describing the situation. Includes `phase=H`: a halt is a described situation, not a script failure. |
+| `1` | The situation could not be read. Nothing on stdout, reason on stderr. |
+
+Exit 1 covers: `loop.json` unparseable or violating its schema,
+`loop.config.toml` unparseable, `tasks.md` missing, the root not being a git
+repository, and the sibling `tlc-spec-driven` skill not being resolvable.
+
+A halt is deliberately not an exit code. `loop.sh`, a goal evaluator, and the
+in-turn motor all read the same one-line contract, so a halt reason expressed
+in that vocabulary needs one parser instead of three.

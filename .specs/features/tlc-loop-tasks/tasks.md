@@ -318,7 +318,7 @@ T26
 
 ---
 
-### T9: Document the detect contract
+### T9: Document the detect contract ✅
 
 **What**: Reference specifying the output vocabulary, entry conditions, and exit rules of `detect_phase.py`.
 **Where**: `references/phase-transitions.md`
@@ -333,10 +333,10 @@ T26
 
 **Done when**:
 
-- [ ] Every line the implementation can print is listed with its entry condition
-- [ ] The derivation order is documented, including that git wins over state
-- [ ] Exit rules per phase are stated, including that `phase=H` is checked first
-- [ ] No output variant is documented that T8 does not implement
+- [x] Every line the implementation can print is listed with its entry condition
+- [x] The derivation order is documented, including that git wins over state
+- [x] Exit rules per phase are stated, including that `phase=H` is checked first
+- [x] No output variant is documented that T8 does not implement
 
 **Tests**: none
 **Gate**: build
