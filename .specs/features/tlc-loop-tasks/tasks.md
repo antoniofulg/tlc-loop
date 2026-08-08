@@ -556,7 +556,7 @@ T28
 
 ---
 
-### T17: Executor dispatch contract
+### T17: Executor dispatch contract ✅
 
 **What**: Reference specifying the worker payload format, the evidence contract, and the two universal executor rules.
 **Where**: `references/executors.md`
@@ -571,11 +571,11 @@ T28
 
 **Done when**:
 
-- [ ] The payload contents are specified for a batch worker, a verifier, and a fix implementer
-- [ ] The rule that an executor never commits is stated, with the reason
-- [ ] The rule that evidence is verified and never trusted is stated, with what counts as evidence per provider
-- [ ] The timeout behaviour is documented, including that a timeout counts as an executor failure
-- [ ] Using `herdr` is shown as one ordinary `command` executor, not a special case
+- [x] The payload contents are specified for a batch worker, a verifier, and a fix implementer
+- [x] The rule that an executor never commits is stated, with the reason
+- [x] The rule that evidence is verified and never trusted is stated, with what counts as evidence per provider
+- [x] The timeout behaviour is documented, including that a timeout counts as an executor failure
+- [x] Using `herdr` is shown as one ordinary `command` executor, not a special case
 
 **Tests**: none
 **Gate**: build
