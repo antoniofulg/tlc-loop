@@ -1162,12 +1162,12 @@ T30
 
 ---
 
-### T34: Refuse a PASS that predates the code
+### T34: Refuse a PASS that predates the code ✅
 
 **What**: Make `detect_phase.py` treat a verification report older than the last commit as unverified, instead of printing `phase=E`.
-**Where**: `scripts/detect_phase.py`
+**Where**: `scripts/detect_phase.py`, `scripts/update_loop.py`, `scripts/_gitio.py`, `scripts/_state_io.py`, `references/phase-transitions.md`, `references/state-schema.md` (`Where` expanded during execution: recording the covered commit needs the writer, the codec, and a git helper, since `detect_phase.py` must stay read-only)
 **Depends on**: None
-**Reuses**: `verify.last_report` in `loop.json`; the diff range `validation.md` already records.
+**Reuses**: the `verify` block in `loop.json`; `_gitio` for the HEAD lookup.
 **Requirement**: LOOP-04
 
 **Tools**:
@@ -1177,12 +1177,12 @@ T30
 
 **Done when**:
 
-- [ ] A PASS report is accepted only while HEAD matches the commit the verification covered
-- [ ] A commit landing after a PASS returns detection to `phase=V` rather than `phase=E`
-- [ ] The commit a verification covered is recorded by `update_loop.py --verify-round`, so the comparison needs no parsing of `validation.md`
-- [ ] A report for a feature never verified still yields `phase=V`, unchanged
-- [ ] `references/phase-transitions.md` documents the staleness rule in the derivation order
-- [ ] Unit tests cover: fresh PASS reaches `E`, PASS plus a later commit returns to `V`, and no report yields `V`
+- [x] A PASS report is accepted only while HEAD matches the commit the verification covered
+- [x] A commit landing after a PASS returns detection to `phase=V` rather than `phase=E`
+- [x] The commit a verification covered is recorded by `update_loop.py --verify-round`, so the comparison needs no parsing of `validation.md`
+- [x] A report for a feature never verified still yields `phase=V`, unchanged
+- [x] `references/phase-transitions.md` documents the staleness rule in the derivation order
+- [x] Unit tests cover: fresh PASS reaches `E`, PASS plus a later commit returns to `V`, and no report yields `V`
 
 **Tests**: unit
 **Gate**: quick

@@ -506,8 +506,11 @@ class VerifyCeiling(DetectPhaseCase):
         self.assertEqual(self.line(), "phase=V action=verify round=100")
 
     def test_a_pass_report_closes_the_feature_even_at_the_ceiling(self):
-        # "Reached without a PASS" is the condition. A PASS is not a halt.
-        self.write_state(verify={"rounds": 3, "last_verdict": "PASS", "gaps_open": 0})
+        # "Reached without a PASS" is the condition. A PASS is not a halt -
+        # provided it still covers HEAD, which the ceiling does not change.
+        head = _git(self.root, "rev-parse", "HEAD").strip()
+        self.write_state(verify={"rounds": 3, "last_verdict": "PASS", "gaps_open": 0,
+                                 "verified_at": head})
         self.write_config("[verify]\nmax_rounds = 3\n")
         self.write_validation("## Validation: demo - PASS\n\nEvidence: scripts/a.py:12\n")
         self.assertEqual(self.line(), "phase=E action=done")
@@ -523,9 +526,13 @@ class VerifyCeiling(DetectPhaseCase):
 
 
 class Done(DetectPhaseCase):
+    def head(self):
+        return _git(self.root, "rev-parse", "HEAD").strip()
+
     def test_validate_state_exiting_zero_prints_done(self):
-        self.write_state()
         self.complete("T1", "T2", "T3", "T4", "T5", "T6")
+        self.write_state(verify={"rounds": 1, "last_verdict": "PASS",
+                                 "verified_at": self.head()})
         self.write_validation("## Validation: demo - PASS\n\nEvidence: scripts/a.py:12\n")
         self.assertEqual(self.line(), "phase=E action=done")
 
@@ -534,6 +541,48 @@ class Done(DetectPhaseCase):
         self.complete("T1", "T2", "T3", "T4", "T5", "T6")
         self.write_validation("## Validation: demo - FAIL\n\nEvidence: scripts/a.py:12\n")
         self.assertEqual(self.line(), "phase=F action=fix round=1")
+
+
+class StaleVerification(DetectPhaseCase):
+    """A PASS counts only while it still describes the tree (LOOP-04).
+
+    `validate_state.py` answers "does the report say PASS with evidence". It
+    cannot answer "is the report about this code", so a task committed after a
+    PASS would otherwise ship as verified with no verifier having seen it. The
+    commit a verdict covered is recorded alongside it and compared to HEAD.
+    """
+
+    def head(self):
+        return _git(self.root, "rev-parse", "HEAD").strip()
+
+    def _passing_report(self):
+        self.write_validation("## Validation: demo - PASS\n\nEvidence: scripts/a.py:12\n")
+
+    def test_a_commit_after_the_pass_returns_to_verification(self):
+        self.complete("T1", "T2", "T3", "T4", "T5", "T6")
+        verified_at = self.head()
+        self._passing_report()
+        # A commit lands after the verification: same report, newer tree.
+        self.commit("docs: tweak", "notes.txt")
+        self.write_state(verify={"rounds": 1, "last_verdict": "PASS",
+                                 "verified_at": verified_at})
+        self.assertEqual(self.line(), "phase=V action=verify round=2")
+
+    def test_a_pass_covering_head_still_reaches_done(self):
+        self.complete("T1", "T2", "T3", "T4", "T5", "T6")
+        self._passing_report()
+        self.write_state(verify={"rounds": 1, "last_verdict": "PASS",
+                                 "verified_at": self.head()})
+        self.assertEqual(self.line(), "phase=E action=done")
+
+    def test_a_report_with_no_recorded_verification_asks_to_verify(self):
+        # The state carries no verified_at - a rebuilt loop.json, for instance.
+        # Nothing on record proves the report covers this tree, so the safe
+        # answer is one more round rather than declaring done.
+        self.complete("T1", "T2", "T3", "T4", "T5", "T6")
+        self._passing_report()
+        self.write_state()
+        self.assertEqual(self.line(), "phase=V action=verify round=1")
 
 
 class Halt(DetectPhaseCase):

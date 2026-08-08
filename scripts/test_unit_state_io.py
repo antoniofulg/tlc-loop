@@ -40,7 +40,8 @@ class NewState(unittest.TestCase):
         self.assertEqual(state["reconciled"], [])
         self.assertEqual(
             state["verify"],
-            {"rounds": 0, "last_verdict": None, "last_report": None, "gaps_open": 0},
+            {"rounds": 0, "last_verdict": None, "last_report": None, "gaps_open": 0,
+             "verified_at": None},
         )
         self.assertEqual(state["counters"]["iterations_without_commit"], 0)
         self.assertEqual(state["counters"]["gate_attempts"], {})

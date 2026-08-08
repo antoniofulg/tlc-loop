@@ -38,6 +38,19 @@ def is_git_repo(root):
     return _run(["rev-parse", "--git-dir"], root).returncode == 0
 
 
+def head_commit(root):
+    """Full SHA of HEAD, or None when there is no commit to name yet.
+
+    A verification covers the tree as it stood at one commit. Recording that
+    SHA is what lets a later run tell a current PASS from one the code has
+    since moved past.
+    """
+    proc = _run(["rev-parse", "HEAD"], root)
+    if proc.returncode != 0:
+        return None
+    return proc.stdout.strip() or None
+
+
 def completed_tasks(root):
     """Return `(ids, duplicates)` read from `Task:` commit trailers.
 

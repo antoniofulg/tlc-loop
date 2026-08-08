@@ -31,6 +31,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 
+import _gitio
 import _state_io  # noqa: E402
 
 #: The iteration log keeps this many of the most recent entries.
@@ -147,6 +148,9 @@ def apply(state, args):
     if args.verify_round:
         state["verify"]["rounds"] = int(state["verify"].get("rounds") or 0) + 1
         state["verify"]["last_verdict"] = args.verify_round
+        # The commit the verification covered. detect_phase compares it against
+        # HEAD so a PASS stops counting once the code moves past it (LOOP-04).
+        state["verify"]["verified_at"] = _gitio.head_commit(args.root)
     if args.gaps is not None:
         state["verify"]["gaps_open"] = args.gaps
     if args.report is not None:

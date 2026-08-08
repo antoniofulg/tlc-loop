@@ -166,6 +166,12 @@ iteration until the tick or the history is fixed stores it exactly once.
 verdict with `gaps_open > 0` selects `phase=F` (fix), anything else selects
 `phase=V` (verify).
 
+`verified_at` holds the commit the last verdict covered, stamped by
+`update_loop.py --verify-round`. A PASS closes the feature only while that
+commit is still HEAD; anything committed afterwards reopens verification. It is
+the one verification fact git cannot supply on its own, which is why it lives
+here rather than being derived.
+
 Before either, it compares `rounds` against `verify.max_rounds` from the
 config. Reaching the ceiling without a PASS prints
 `phase=H action=halt reason=verify_exhausted`, so the escalation is enforced by

@@ -391,16 +391,44 @@ class EndToEnd(unittest.TestCase):
         self.complete("T1", "T2", "T3", "T4", "T5", "T6")
         self.assertEqual(self.detect(), "phase=V action=verify round=1")
 
+    def record_pass(self):
+        """Write the report and record the verdict the way the loop does.
+
+        A PASS closes the feature only while it still covers HEAD, so the
+        verdict has to be recorded through the writer that stamps the commit -
+        writing the report alone leaves nothing on record (T34).
+        """
+        self.write(".specs/features/toy/validation.md", PASS_REPORT)
+        recorded = self.run_script(
+            "update_loop.py", "toy", "--root", self.root,
+            "--verify-round", "PASS", "--gaps", "0",
+            "--report", ".specs/features/toy/validation.md",
+            "--iteration-done", "--phase", "V", "--action", "verify round 1",
+        )
+        self.assertEqual(recorded.returncode, 0, recorded.stderr)
+
     def test_a_real_pass_report_closes_the_feature(self):
         self.bootstrap()
         self.complete("T1", "T2", "T3", "T4", "T5", "T6")
-        self.write(".specs/features/toy/validation.md", PASS_REPORT)
+        self.record_pass()
         self.assertEqual(self.detect(), "phase=E action=done")
+
+    def test_a_commit_after_the_pass_reopens_verification(self):
+        # The gap dogfooding exposed: the report was PASS, but a task landed
+        # after it and detect still said done (T34).
+        self.bootstrap()
+        self.complete("T1", "T2", "T3", "T4", "T5", "T6")
+        self.record_pass()
+        self.assertEqual(self.detect(), "phase=E action=done")
+        self.write("late.txt", "landed after the verification")
+        _git(self.root, "add", "-A")
+        _git(self.root, "commit", "-q", "-m", "docs: land something after the verification")
+        self.assertEqual(self.detect(), "phase=V action=verify round=2")
 
     def test_the_driver_stops_on_done_instead_of_respawning(self):
         self.bootstrap()
         self.complete("T1", "T2", "T3", "T4", "T5", "T6")
-        self.write(".specs/features/toy/validation.md", PASS_REPORT)
+        self.record_pass()
         proc = self.run_loop_sh()
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(proc.stdout.splitlines()[-1], "phase=E action=done")

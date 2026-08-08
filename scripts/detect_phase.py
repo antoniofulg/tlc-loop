@@ -54,6 +54,27 @@ import _state_io  # noqa: E402
 import _tasksmd  # noqa: E402
 
 
+def _verification_covers_head(state, root):
+    """Whether the recorded PASS describes the tree as it stands now.
+
+    `validate_state.py` reads the report and answers "does this say PASS with
+    evidence". It cannot answer "is this report about the current code", and a
+    task committed after a PASS would otherwise ship as verified without any
+    verifier having seen it.
+
+    A verdict is recorded together with the commit it covered
+    (`verify.verified_at`, written by `update_loop.py --verify-round`). The PASS
+    counts only while that commit is still HEAD. An absent value means no
+    verification is on record for this state - after a rebuilt `loop.json`, for
+    instance - and is treated as uncovered, which costs one verify round and
+    never declares an unverified tree done.
+    """
+    verified_at = ((state.get("verify") or {}).get("verified_at")) or None
+    if verified_at is None:
+        return False
+    return verified_at == _gitio.head_commit(root)
+
+
 def _quote(text):
     """Render a halt detail as one double-quoted token."""
     flat = " ".join(str(text or "").split())
@@ -207,7 +228,9 @@ def main(argv=None):
         print(_line(core, notes))
         return 0
 
-    # 6. Nothing pending. The sibling validator decides whether this is done.
+    # 6. Nothing pending. The sibling validator decides whether the report says
+    #    PASS - and `_verification_covers_head` decides whether that PASS still
+    #    describes this tree.
     try:
         validator = _paths.tlc_script("validate_state.py")
     except _paths.SiblingSkillError as exc:
@@ -218,7 +241,7 @@ def main(argv=None):
         capture_output=True,
         text=True,
     )
-    if finished.returncode == 0:
+    if finished.returncode == 0 and _verification_covers_head(state, root):
         print(_line("phase=E action=done", notes))
         return 0
 

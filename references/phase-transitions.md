@@ -42,7 +42,7 @@ Every line the implementation can print, with the condition that produces it.
 | `phase=0 action=bootstrap` | `loop.json` does not exist for this feature. |
 | `phase=H action=halt reason=<slug> detail="<text>"` | A halt condition holds. Checked before any work is described. |
 | `phase=B action=execute_batch batch=<label> tasks=<ids>` | At least one planned task is not yet done. |
-| `phase=E action=done` | Nothing pending and `validate_state.py` exits 0. |
+| `phase=E action=done` | Nothing pending, `validate_state.py` exits 0, and the recorded verdict still covers HEAD. |
 | `phase=F action=fix round=<N>` | Nothing pending, not done, the last verdict was `FAIL` and gaps are still open. |
 | `phase=V action=verify round=<N>` | Nothing pending, not done, and no open gaps to fix. |
 
@@ -100,7 +100,17 @@ contract, not an implementation detail.
 6. **`pending = planned - done`.** Non-empty → `phase=B`, packing the pending
    tasks into batches of whole phases up to `execute.batch_size` and naming the
    first one.
-7. **Ask the validator.** `validate_state.py` exiting 0 → `phase=E`.
+7. **Ask the validator, then ask how old its answer is.** `validate_state.py`
+   exiting 0 says the report reads PASS with evidence. It cannot say whether
+   the report describes *this* code. So the PASS counts only while
+   `verify.verified_at` - the commit stamped onto the verdict by
+   `update_loop.py --verify-round` - is still HEAD. Both true → `phase=E`.
+
+   A commit landing after a PASS therefore returns detection to `phase=V`
+   rather than closing the feature: otherwise a task would ship as verified
+   with no verifier having seen it. An absent `verified_at` counts as
+   uncovered - after a rebuilt `loop.json`, for instance - which costs one
+   verify round and never declares an unverified tree done.
 8. **Check the verify budget.** `verify.rounds` having reached
    `verify.max_rounds` → `phase=H reason=verify_exhausted`. An absent
    `max_rounds` is unlimited and never fires.

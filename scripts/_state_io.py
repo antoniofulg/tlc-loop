@@ -65,7 +65,8 @@ def new_state(feature, objective, harness):
         "current_task": None,
         "no_diff_tasks": [],
         "reconciled": [],
-        "verify": {"rounds": 0, "last_verdict": None, "last_report": None, "gaps_open": 0},
+        "verify": {"rounds": 0, "last_verdict": None, "last_report": None,
+                   "gaps_open": 0, "verified_at": None},
         "counters": {
             "started_at_ms": int(time.time() * 1000),
             "iterations_without_commit": 0,
