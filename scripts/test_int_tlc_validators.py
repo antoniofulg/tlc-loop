@@ -236,30 +236,30 @@ class ValidateTasks(ValidatorCase):
         )
         self.assertIn("must point backward", proc.stdout)
 
-    def test_the_standard_template_layout_hides_a_forward_phase_dependency(self):
-        """FINDING: the forward-dependency check is vacuous under the template.
+    def test_the_standard_template_layout_rejects_a_forward_phase_dependency(self):
+        """A forward dependency is caught in the template's own layout.
 
-        `parse_phase_membership` maps a task to a phase only when the task's own
-        `### TN:` header appears after a `### Phase N` header, and it never
-        leaves phase mode. The standard template declares the phases with
-        diagrams in the Execution Plan and then defines every task in one flat
-        Task Breakdown afterwards, so every task is attributed to the LAST phase
-        heading in the file. Same phase for everything means `p_dep > p_here` is
-        never true, and the check cannot fire on any file the template produced.
+        This began as a characterization test. `parse_phase_membership` used to
+        map a task to a phase only when the task's own `### TN:` header followed
+        a `### Phase N` header, and never left phase mode - so the template's
+        flat Task Breakdown attributed every task to the LAST phase in the file,
+        `p_dep > p_here` was never true, and the check could not fire on
+        anything the template produced. The sibling skill has since fixed the
+        attribution, and this test now asserts the rejection it was written to
+        document the absence of.
 
-        The input that slips through is `FORWARD_DEP_TEMPLATE_LAYOUT`: T1 lives
-        in Phase 1 and declares `Depends on: T4`, which lives in Phase 2. The
-        previous test proves the rule works when the layout lets it, so this is
-        a phase-attribution defect, not a missing rule.
+        `FORWARD_DEP_TEMPLATE_LAYOUT` puts T1 in Phase 1 declaring
+        `Depends on: T4`, which lives in Phase 2. The previous test covers the
+        same dependency in the nested layout, so the pair pins both layouts.
         """
         proc = self.check(FORWARD_DEP_TEMPLATE_LAYOUT)
         self.assertEqual(
             proc.returncode,
-            0,
-            "the forward-dependency defect appears to be fixed; delete this "
-            "characterization test and assert the rejection instead",
+            1,
+            "a forward-phase dependency in the template layout must be "
+            f"rejected; validator said: {proc.stdout.strip()}",
         )
-        self.assertNotIn("must point backward", proc.stdout)
+        self.assertIn("must point backward", proc.stdout)
 
     def test_an_empty_tests_field_counts_as_present(self):
         """FINDING: `Tests:` with no value satisfies the field-presence check.
