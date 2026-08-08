@@ -262,7 +262,7 @@ T26
 
 ---
 
-### T7: Pack phases into task-budgeted batches
+### T7: Pack phases into task-budgeted batches ✅
 
 **What**: Implement the batching algorithm - accumulate whole phases in order until the task budget is reached, never splitting a phase.
 **Where**: `scripts/_batching.py`
@@ -277,11 +277,11 @@ T26
 
 **Done when**:
 
-- [ ] `pack(tasks, budget)` returns batches of consecutive whole phases, never splitting a phase
-- [ ] A trailing batch of one or two tasks is folded into the previous batch
-- [ ] The worked examples from `sub-agents.md` reproduce exactly: `[3,3,3,3,4,4]` yields three batches, `[8,2,2,8]` yields three, `[5,5,5,5]` yields two
-- [ ] A phase exceeding roughly 1.5x the budget is returned flagged, not silently split
-- [ ] Unit tests cover all three worked examples plus the oversized-phase flag
+- [x] `pack(tasks, budget)` returns batches of consecutive whole phases, never splitting a phase
+- [x] A trailing batch of one or two tasks is folded into the previous batch
+- [x] The worked examples from `sub-agents.md` reproduce exactly: `[3,3,3,3,4,4]` yields three batches, `[8,2,2,8]` yields three, `[5,5,5,5]` yields two
+- [x] A phase exceeding roughly 1.5x the budget is returned flagged, not silently split
+- [x] Unit tests cover all three worked examples plus the oversized-phase flag
 
 **Tests**: unit
 **Gate**: quick
