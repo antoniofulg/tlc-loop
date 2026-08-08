@@ -464,7 +464,7 @@ T28
 
 ---
 
-### T14: Probe provider environment markers and effort values
+### T14: Probe provider environment markers and effort values ✅
 
 **What**: Run the discovery inside `codex` and `cursor-agent` to capture their real environment markers and accepted effort values.
 **Where**: `references/provider-discovery.md`
@@ -479,10 +479,18 @@ T28
 
 **Done when**:
 
-- [ ] Environment markers that uniquely identify `codex` and `cursor-agent` are captured verbatim from a run inside each
-- [ ] Accepted `effort` values are confirmed per provider, replacing the `[?]` entries in the design's table
-- [ ] Every captured value records how it was obtained, so a future reader can re-verify
-- [ ] Any provider whose marker could not be determined is recorded as unresolved rather than guessed
+- [~] Environment markers that uniquely identify `codex` and `cursor-agent` are captured verbatim from a run inside each - **cursor captured; codex UNRESOLVED**
+- [x] Accepted `effort` values are confirmed per provider, replacing the `[?]` entries in the design's table
+- [x] Every captured value records how it was obtained, so a future reader can re-verify
+- [x] Any provider whose marker could not be determined is recorded as unresolved rather than guessed
+
+> **Deviation.** The codex marker could not be captured: the account hit its
+> usage limit, and the hook route that would sidestep the model needs
+> credentials from the real `CODEX_HOME`. Four attempts are recorded in
+> `references/provider-discovery.md`. Candidate names from the binary were
+> rejected rather than adopted, so `init_loop.HARNESS_MARKERS` has no codex
+> entry and codex is named with `--respawn`. Effort values were still resolved
+> from the binary's enum.
 
 **Tests**: none
 **Gate**: build
