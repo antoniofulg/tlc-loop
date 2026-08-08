@@ -28,8 +28,9 @@ like. Counters are advanced by `update_loop.py`, never here.
 
 The consequence worth internalising: **there is no stored current phase.** The
 phase is re-derived from evidence on every run. That is what makes an
-interrupted run resume correctly, and why deleting `loop.json` costs counters
-and the objective but never task progress.
+interrupted run resume correctly, and it is why task progress is the one thing
+deleting `loop.json` does not cost. It costs everything else in the file;
+`state-schema.md` itemises the bill.
 
 ---
 
@@ -152,10 +153,12 @@ somebody rewrote commits, and the transcript says so.
 
 Step 1 and step 2 look similar and are deliberately opposite.
 
-An **absent** `loop.json` costs counters and the objective, never task
-progress: bootstrap writes a fresh file and the next detect re-derives the same
-next task from git and `tasks.md`. Reconstruction is safe because nothing was
-lost that git does not already hold.
+An **absent** `loop.json` keeps task progress and loses the rest: bootstrap
+writes a fresh file and the next detect re-derives the same next task from git
+and `tasks.md`, but the objective is re-supplied unchecked, every limit budget
+restarts, one verification is owed, and a recorded halt is gone.
+`state-schema.md` itemises it. Reconstruction is *allowed* because the run can
+continue from it, not because it is free.
 
 An **unreadable** one is different. The bytes exist, so something is in there -
 possibly the objective a run has been driving toward for eight hours - and the

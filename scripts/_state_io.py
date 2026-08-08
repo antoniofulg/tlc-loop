@@ -3,8 +3,9 @@
 `loop.json` is machine-owned with a single writer (LOOP-01 AC 5), so the codec
 is deliberately unforgiving: anything it did not write itself is a corruption
 signal, not something to repair silently. Completed tasks are absent by design
-(D3) - they are derived from git trailers on every run, which is what makes the
-file disposable.
+(D3) - they are derived from git trailers on every run, which is why losing
+this file costs no task progress. It costs everything else in the file; see
+`references/state-schema.md`.
 
 State lives at `<root>/.specs/features/<feature>/loop.json`.
 

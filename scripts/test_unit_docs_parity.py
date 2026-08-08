@@ -1,5 +1,10 @@
 """Parity between the shipped prose and the code it describes (T33, LOOP-06).
 
+Two checks live here. The first is the halt vocabulary; the second (T38) is the
+claim about what deleting `loop.json` costs, which drifted through three
+verification rounds because each fix chased the citations it was handed instead
+of searching the repository.
+
 The halt vocabulary is enumerated in three places: `update_loop.HALT_REASONS`,
 the Phase H branch of `SKILL.md`, and the field shapes in
 `references/phase-transitions.md`. The constant is the source of truth; the two
@@ -102,6 +107,108 @@ class HaltReasonParity(unittest.TestCase):
         for entry in ENUMERATIONS:
             with self.subTest(document=entry[0]):
                 self.assertTrue(documented_reasons(*entry))
+
+
+#: Phrasings of the over-broad claim about deleting `loop.json`. Each one was
+#: shipped and each one was false: the file also holds the objective, every
+#: limit budget, the verify rounds, a recorded halt, and the audit trails.
+#: `references/state-schema.md` itemises the real bill; these are the ways of
+#: saying "and nothing else matters" that must not come back.
+RETRACTED_CLAIMS = (
+    "never task progress",
+    "costs counters",
+    "costs the counters",
+    "nothing is stranded",
+    # Unqualified: the file is disposable for task progress and for nothing
+    # else, so the bare adjective always over-claims.
+    "disposable",
+)
+
+#: The surface an agent actually reads at runtime, plus the source that
+#: describes itself. Deliberately excludes `.specs/`: `validation.md` quotes the
+#: false claims as findings, `tasks.md` quotes them as criteria, and
+#: `LESSONS.md` quotes them as the lesson.
+def shipped_documents():
+    """Every shipped document and non-test script, as `(relative_path, text)`."""
+    found = []
+    for relative in ("SKILL.md", "README.md"):
+        found.append(relative)
+    for directory in ("references", "assets", "scripts"):
+        for name in sorted(os.listdir(os.path.join(ROOT, directory))):
+            if name.startswith("test_"):
+                continue
+            if name.endswith((".md", ".py", ".sh", ".toml")):
+                found.append(f"{directory}/{name}")
+    for relative in found:
+        with open(os.path.join(ROOT, relative), encoding="utf-8") as handle:
+            yield relative, handle.read()
+
+
+def offending_lines(text, claim):
+    """`(line number, line)` for each line containing `claim`, case-insensitive."""
+    needle = claim.lower()
+    return [
+        (number, line.strip())
+        for number, line in enumerate(text.splitlines(), start=1)
+        if needle in line.lower()
+    ]
+
+
+class DeletingTheStateFileIsNotFree(unittest.TestCase):
+    """T38: no shipped document may re-assert the retracted claim.
+
+    Task progress survives deleting `loop.json`; everything else in the file
+    does not. A sentence that says only the first half reads as a guarantee,
+    and an agent deciding at 3am whether reconstruction is safe acts on it.
+    """
+
+    def test_no_shipped_document_repeats_a_retracted_claim(self):
+        offenders = []
+        for relative, text in shipped_documents():
+            for claim in RETRACTED_CLAIMS:
+                for number, line in offending_lines(text, claim):
+                    offenders.append(f"{relative}:{number} ({claim!r}): {line}")
+        self.assertEqual(
+            offenders,
+            [],
+            "these lines re-assert what deleting loop.json costs; "
+            "references/state-schema.md itemises the real bill:\n"
+            + "\n".join(offenders),
+        )
+
+    def test_the_scan_actually_reaches_the_documents(self):
+        # A scan over an empty file list passes vacuously, which is the one way
+        # this check could stop working without anyone noticing.
+        scanned = [relative for relative, _ in shipped_documents()]
+        for expected in (
+            "SKILL.md",
+            "README.md",
+            "references/state-schema.md",
+            "references/phase-transitions.md",
+            "scripts/detect_phase.py",
+            "scripts/_state_io.py",
+        ):
+            self.assertIn(expected, scanned)
+
+    def test_a_reintroduced_claim_is_named_with_its_location(self):
+        planted = "It is also disposable: deleting it costs the counters.\n"
+        offenders = [
+            f"fake.md:{number} ({claim!r}): {line}"
+            for claim in RETRACTED_CLAIMS
+            for number, line in offending_lines(planted, claim)
+        ]
+        self.assertTrue(offenders)
+        self.assertIn("fake.md:1", offenders[0])
+
+    def test_state_schema_says_what_deleting_the_file_does_cost(self):
+        # Retraction without replacement leaves the reader with nothing, which
+        # is how the claim came back the last two times.
+        path = os.path.join(ROOT, "references", "state-schema.md")
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("## What deleting the file costs", text)
+        for field in ("objective", "counters", "verified_at", "halt", "reconciled"):
+            self.assertIn(field, text.split("## What deleting the file costs", 1)[1])
 
 
 class TheCheckItselfDiscriminates(unittest.TestCase):

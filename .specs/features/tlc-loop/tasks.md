@@ -1291,7 +1291,7 @@ T30
 
 ---
 
-### T38: Retract the disposability claim wherever it is now wrong
+### T38: Retract the disposability claim wherever it is now wrong ✅
 
 **What**: Sweep every statement about what surviving `loop.json` deletion costs, so all of them match the behaviour T37 leaves.
 **Where**: `references/state-schema.md`
@@ -1306,10 +1306,10 @@ T30
 
 **Done when**:
 
-- [ ] Every claim about deleting `loop.json` names what is actually lost, in `references/state-schema.md`, `references/phase-transitions.md`, `scripts/detect_phase.py`, `README.md`, and the feature's `design.md`
-- [ ] The sentence naming "three fields" agrees with the list that follows it
-- [ ] No statement calls the file disposable without saying disposable for what
-- [ ] The claim that reconstruction is safe is either true after T37 or removed
+- [x] Every claim about deleting `loop.json` names what is actually lost, in `references/state-schema.md`, `references/phase-transitions.md`, `scripts/detect_phase.py`, `README.md`, and the feature's `design.md` - plus three sites round 4 did not cite: `scripts/_state_io.py`, `references/config-schema.md`, and `design.md`'s "deliberately absent" note
+- [x] The sentence naming "three fields" agrees with the list that follows it - the count is gone. `state-schema.md` now itemises the loss in a table, so there is no arithmetic left to drift
+- [x] No statement calls the file disposable without saying disposable for what - the bare word is gone from the shipped surface, and a Quick-gate test keeps it out
+- [x] The claim that reconstruction is safe is either true after T37 or removed - rewritten: reconstruction is allowed because the run can continue from it, not because it is free
 
 **Tests**: none
 **Gate**: build

@@ -60,8 +60,9 @@ graph TD
 
 **Invariant that makes resume work:** `detect_phase.py` never trusts a stored
 "current phase". It re-derives the phase every run from git trailers, `tasks.md`,
-and `loop.json` counters. Deleting `loop.json` costs counters and the objective,
-never task progress.
+and `loop.json` counters. Task progress is the one thing deleting `loop.json`
+does not cost; it costs everything else in the file, itemised in
+`references/state-schema.md`.
 
 ### Iteration cycle
 
@@ -303,7 +304,7 @@ Stdlib `json`, written with `indent=2` and sorted keys so diffs stay readable.
 | `iterations` | Append-only, capped at the last 50 |
 
 **Deliberately absent:** `completed_tasks`. Derived from git trailers every run
-(D3). This is what makes the file disposable.
+(D3). This is why losing the file costs no task progress.
 
 ### `.specs/loop.config.toml` — user-owned, read-only to the loop
 

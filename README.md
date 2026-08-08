@@ -141,11 +141,12 @@ Gate: quick PASS
 `detect_phase.py` reads them with
 `git log --format="%(trailers:key=Task,valueonly)"` and compares against
 `tasks.md`. There is no stored "current phase" — it is re-derived every run.
-Delete `.specs/features/my-feature/loop.json` mid-run and nothing is stranded:
+Delete `.specs/features/my-feature/loop.json` mid-run and no task is stranded:
 the next detect prints `phase=0 action=bootstrap`, and once you re-bootstrap it
-names the same task it would have. Task progress lives in git, so it survives.
-The objective, the counters, and the record of which commit was verified do not
-- they are re-established, and verification is owed again.
+names the same task it would have, because task progress lives in git. Nothing
+else in the file does. You re-supply the objective, every limit budget restarts,
+a recorded halt is cleared, and verification is owed again. It is a deliberate
+act with a price, not a reset button.
 
 ## When it stops
 

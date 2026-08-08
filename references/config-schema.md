@@ -22,8 +22,8 @@ Runtime-resolved values go to `loop.json` instead. When `provider = "auto"`
 resolves to a concrete harness at bootstrap, the resolved name is recorded in
 `loop.json` as `harness_resolved`; the config still reads `auto`. That split is
 what lets you edit the config between runs without fighting the loop for
-ownership of the file, and what makes `loop.json` disposable without losing
-your settings.
+ownership of the file, and what keeps your settings out of the state file that
+one run throws away.
 
 ### TOML has no null, so omission means unlimited
 

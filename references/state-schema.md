@@ -8,13 +8,14 @@ It is written with `indent=2` and sorted keys, and replaced atomically (temp
 file plus rename), so a crash mid-write leaves the previous file intact rather
 than a truncated one.
 
-**The file is machine-owned.** Do not hand-edit it. It is also disposable:
-deleting it costs the counters and the objective, never task progress.
+**The file is machine-owned.** Do not hand-edit it. Deleting it costs
+everything in it except task completion, which lives in git. The full bill is
+[below](#what-deleting-the-file-costs); it is larger than it looks.
 
 **It is not committed.** Add `.specs/features/**/loop.json` to the project's
-`.gitignore`. The file is a cache: everything durable in it is either
-reconstructible from git and `tasks.md`, or a counter that only matters to the
-run that is writing it. Committing it is churn on two counts. Every task commit
+`.gitignore`. Nothing in it belongs to the project: it is one run's private
+bookkeeping, and the next run's is different. Committing it is churn on two
+counts. Every task commit
 would carry an unrelated counter bump, which is the opposite of the atomic
 one-task diff the checkpoint exists to produce, and the noise lands in exactly
 the history a reviewer bisects. `checkpoint.py` stages with `git add -A`
@@ -77,17 +78,32 @@ git log --reverse --format="%(trailers:key=Task,valueonly)"
 
 Git is authoritative. If a `tasks.md` tick and git history disagree, git wins
 and the override lands in `reconciled` below rather than passing silently.
-This is what makes the file disposable *for task progress*: delete `loop.json`
-mid-run and the next detect prints `phase=0 action=bootstrap`; re-bootstrap and
-it names the same task, because progress was never stored here.
 
-Three fields are not reconstructible and are lost with the file: `objective`
-(re-supplied at bootstrap), the `counters`, and `verify.verified_at` - so a
-rebuilt state owes one verification round. Deleting the file costs those, never
-task progress.
+So task progress is the one thing the file can lose without losing anything:
+delete `loop.json` mid-run and the next detect prints
+`phase=0 action=bootstrap`; re-bootstrap and it names the same task, because
+progress was never stored here. A task that changed nothing is included - it is
+committed empty, so it carries a `Task:` trailer like every other task (T37).
 
-The first of the three is `no_diff_tasks`, below - the piece of completion
-state git cannot express.
+## What deleting the file costs
+
+Everything else. Nothing below is reconstructible from git, and re-bootstrapping
+restores none of it:
+
+| Lost | Consequence |
+| --- | --- |
+| `objective` | Re-supplied at bootstrap, and nothing checks the new one against the old. A rebuilt run can be driving at a different target. |
+| `counters` | Every `[limits]` budget restarts, including the `max_minutes` clock measured from `started_at_ms`. A run near a limit walks away from it. |
+| `verify.rounds`, `last_verdict`, `gaps_open` | The `verify.max_rounds` budget restarts, so a run that was one round from `verify_exhausted` gets a full new allowance. |
+| `verify.verified_at` | The rebuilt state owes one verification round; a PASS no longer covers HEAD. |
+| `halt` | A recorded halt is cleared. A run that stopped for a reason resumes as if it had not. |
+| `reconciled`, `iterations` | The audit trails. Nothing derives a decision from them, but the record of what happened is gone. |
+| `no_diff_tasks` | Legacy, and empty on any run bootstrapped after T37. A run already in flight when T37 landed loses the entries it wrote. |
+
+Deleting the file is therefore a deliberate act with a price, not a reset
+button. It is still the documented way out of a corrupt state file - see
+[phase-transitions.md](phase-transitions.md) - because a halt you can explain
+beats a state nobody can read.
 
 ---
 

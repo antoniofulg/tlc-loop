@@ -10,8 +10,9 @@ leaves `git status --porcelain` and `loop.json` byte-identical.
 
 There is no stored "current phase". The phase is re-derived every run from git
 trailers, `tasks.md`, and the `loop.json` counters, which is what makes an
-interrupted run resume at the right place: deleting `loop.json` costs counters
-and the objective, never task progress.
+interrupted run resume at the right place. Task progress is the one thing
+deleting `loop.json` does not cost; it costs everything else in the file, and
+`references/state-schema.md` itemises what.
 
 Usage:
     detect_phase.py <feature> [--root DIR]

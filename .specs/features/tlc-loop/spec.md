@@ -78,7 +78,7 @@ it, restart is guesswork and unattended execution is impossible.
 5. IF `tasks.md` and git history disagree about a task THEN the system SHALL treat git as the source of truth and record the reconciliation in `loop.json`
 6. The system SHALL mutate `loop.json` only through its own state-writing script, never by hand-editing or by another writer
 
-**Independent Test**: Delete `loop.json` mid-feature and confirm the loop asks to bootstrap rather than failing; re-bootstrap, and confirm the next detect names the same task git history implies. Task progress survives the deletion; the objective and the counters do not.
+**Independent Test**: Delete `loop.json` mid-feature and confirm the loop asks to bootstrap rather than failing; re-bootstrap, and confirm the next detect names the same task git history implies. Task progress survives the deletion; nothing else in the file does.
 
 ---
 
