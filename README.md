@@ -141,8 +141,11 @@ Gate: quick PASS
 `detect_phase.py` reads them with
 `git log --format="%(trailers:key=Task,valueonly)"` and compares against
 `tasks.md`. There is no stored "current phase" — it is re-derived every run.
-Delete `.specs/features/my-feature/loop.json` mid-run and the next detect names
-the same next task, because that file is a cache and git is the truth.
+Delete `.specs/features/my-feature/loop.json` mid-run and nothing is stranded:
+the next detect prints `phase=0 action=bootstrap`, and once you re-bootstrap it
+names the same task it would have. Task progress lives in git, so it survives.
+The objective, the counters, and the record of which commit was verified do not
+- they are re-established, and verification is owed again.
 
 ## When it stops
 
@@ -178,7 +181,7 @@ Stated plainly, because finding these yourself at 3am is worse.
   `references/provider-discovery.md`.
 - **A non-Claude provider needs a `command` executor**, which gets no shared
   context — the whole payload travels by file.
-- **Eleven acceptance criteria are prose**, verified by review rather than by a
+- **Thirteen acceptance criteria are prose**, verified by review rather than by a
   test. The build gate proves those documents exist, not that they are correct.
 
 ## Development

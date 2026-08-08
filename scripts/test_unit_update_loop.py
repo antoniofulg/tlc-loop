@@ -41,6 +41,30 @@ def _seed(root, **overrides):
     return state
 
 
+def _git(root, *args):
+    proc = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise AssertionError(f"git {' '.join(args)} failed: {proc.stderr}")
+    return proc.stdout
+
+
+def _seed_repo(root):
+    """Make `root` a repo with one commit, and return its SHA."""
+    _git(root, "init", "-q", "-b", "main")
+    _git(root, "config", "user.email", "loop@test.invalid")
+    _git(root, "config", "user.name", "Loop Test")
+    _git(root, "config", "commit.gpgsign", "false")
+    return _commit_more(root, "seed.txt", "chore: seed")
+
+
+def _commit_more(root, filename="more.txt", message="chore: more"):
+    with open(os.path.join(root, filename), "w", encoding="utf-8") as fh:
+        fh.write(filename)
+    _git(root, "add", filename)
+    _git(root, "commit", "-q", "-m", message)
+    return _git(root, "rev-parse", "HEAD").strip()
+
+
 def _read(root):
     with open(_state_io.state_path(FEATURE, root), encoding="utf-8") as fh:
         return json.load(fh)
@@ -314,6 +338,34 @@ class VerifyRounds(unittest.TestCase):
             verify = _read(root)["verify"]
             self.assertEqual(verify["last_verdict"], "PASS")
             self.assertEqual(verify["last_report"], ".specs/f/validation.md")
+
+    def test_a_round_stamps_the_commit_it_covered(self):
+        # Without this, detect_phase cannot tell a current PASS from one the
+        # code has moved past, which is the whole of T34.
+        with tempfile.TemporaryDirectory() as root:
+            head = _seed_repo(root)
+            _seed(root)
+            _run(root, "--verify-round", "PASS")
+            self.assertEqual(_read(root)["verify"]["verified_at"], head)
+
+    def test_the_stamp_tracks_head_rather_than_a_fixed_value(self):
+        # A stamp that is merely present, or always the same, would satisfy a
+        # weaker assertion while accepting every stale report.
+        with tempfile.TemporaryDirectory() as root:
+            first = _seed_repo(root)
+            _seed(root)
+            _run(root, "--verify-round", "FAIL")
+            self.assertEqual(_read(root)["verify"]["verified_at"], first)
+            second = _commit_more(root)
+            self.assertNotEqual(first, second)
+            _run(root, "--verify-round", "PASS")
+            self.assertEqual(_read(root)["verify"]["verified_at"], second)
+
+    def test_outside_a_repository_the_stamp_is_absent_rather_than_wrong(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root)
+            _run(root, "--verify-round", "PASS")
+            self.assertIsNone(_read(root)["verify"]["verified_at"])
 
     def test_an_unknown_verdict_is_rejected(self):
         with tempfile.TemporaryDirectory() as root:

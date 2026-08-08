@@ -29,17 +29,19 @@ sys.path.insert(0, SCRIPTS)
 
 import update_loop  # noqa: E402
 
-#: Where each document enumerates the vocabulary, and the phrase that anchors
-#: it. The enumeration runs from the anchor to the end of that sentence.
+#: Where each document enumerates the vocabulary, the phrase that anchors it,
+#: and what ends the enumeration. Prose runs to the end of its sentence; a table
+#: runs to the blank line that closes it.
 ENUMERATIONS = (
-    ("SKILL.md", "Implemented reasons:"),
-    ("references/phase-transitions.md", "`reason=<slug>` is one of"),
+    ("SKILL.md", "Implemented reasons:", ".\n"),
+    ("references/phase-transitions.md", "`reason=<slug>` is one of", ".\n"),
+    ("README.md", "| Reason | Meaning |", "\n\n"),
 )
 
 BACKTICKED = re.compile(r"`([a-z_]+)`")
 
 
-def documented_reasons(relative_path, anchor):
+def documented_reasons(relative_path, anchor, terminator=".\n"):
     """Return the reasons a document enumerates after `anchor`.
 
     Raises if the anchor is gone, so a rewrite that drops the enumeration fails
@@ -55,11 +57,11 @@ def documented_reasons(relative_path, anchor):
             f"{anchor!r} is gone; parity can no longer be checked"
         )
     sentence = text[start + len(anchor):]
-    end = sentence.find(".\n")
+    end = sentence.find(terminator)
     if end < 0:
         raise AssertionError(
-            f"{relative_path}: the enumeration after {anchor!r} does not end "
-            "in a sentence; parity can no longer be checked"
+            f"{relative_path}: the enumeration after {anchor!r} is not closed "
+            f"by {terminator!r}; parity can no longer be checked"
         )
     return BACKTICKED.findall(sentence[:end])
 
@@ -90,10 +92,16 @@ class HaltReasonParity(unittest.TestCase):
     def test_phase_transitions_enumerates_exactly_the_implemented_reasons(self):
         assert_parity("references/phase-transitions.md", documented_reasons(*ENUMERATIONS[1]))
 
+    def test_readme_enumerates_exactly_the_implemented_reasons(self):
+        # The README's halt table is a third copy of the vocabulary. Accurate
+        # when written is not the bar - it has to stay accurate, which is what
+        # brings it under the same gate as the other two.
+        assert_parity("README.md", documented_reasons(*ENUMERATIONS[2]))
+
     def test_every_documented_enumeration_is_locatable(self):
-        for relative_path, anchor in ENUMERATIONS:
-            with self.subTest(document=relative_path):
-                self.assertTrue(documented_reasons(relative_path, anchor))
+        for entry in ENUMERATIONS:
+            with self.subTest(document=entry[0]):
+                self.assertTrue(documented_reasons(*entry))
 
 
 class TheCheckItselfDiscriminates(unittest.TestCase):

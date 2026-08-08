@@ -142,6 +142,33 @@ class NotARepository(unittest.TestCase):
             self.assertIn(os.path.abspath(root), str(ctx.exception))
 
 
+class HeadCommit(unittest.TestCase):
+    """The SHA a verification covers. Wrong here means a stale PASS is accepted."""
+
+    def test_returns_the_current_head(self):
+        with tempfile.TemporaryDirectory() as root:
+            _init(root)
+            sha = _commit(root, "a.txt", "chore: a")
+            self.assertEqual(_gitio.head_commit(root), sha)
+
+    def test_moves_with_a_new_commit(self):
+        with tempfile.TemporaryDirectory() as root:
+            _init(root)
+            first = _commit(root, "a.txt", "chore: a")
+            second = _commit(root, "b.txt", "chore: b")
+            self.assertNotEqual(first, second)
+            self.assertEqual(_gitio.head_commit(root), second)
+
+    def test_a_repository_with_no_commits_has_no_head(self):
+        with tempfile.TemporaryDirectory() as root:
+            _init(root)
+            self.assertIsNone(_gitio.head_commit(root))
+
+    def test_outside_a_repository_there_is_no_head(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.assertIsNone(_gitio.head_commit(root))
+
+
 class TrailerArgs(unittest.TestCase):
     def test_composes_task_and_gate_trailers(self):
         self.assertEqual(

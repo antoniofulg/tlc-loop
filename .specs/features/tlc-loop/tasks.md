@@ -96,6 +96,12 @@ T21 -> T23
 T24
 ```
 
+### Phase 11: Verifier round 3 fixes
+
+```
+T36
+```
+
 ### Phase 10: Repository presentation
 
 ```
@@ -1217,4 +1223,31 @@ T30
 - [x] The deviation from the skill spec's no-README rule is recorded in `context.md` with its reason
 
 **Tests**: none
+**Gate**: build
+
+---
+
+### T36: Close the round 3 gaps ✅
+
+**What**: Correct three prose claims the code does not honour, gate the fourth copy of the halt vocabulary, and cover T34's writer at the gate level its own task declares.
+**Where**: `README.md`, `references/state-schema.md`, `.specs/features/tlc-loop/spec.md`, `scripts/test_unit_docs_parity.py`, `scripts/test_unit_update_loop.py`, `scripts/test_unit_gitio.py`
+**Depends on**: None
+**Reuses**: The existing parity mechanism from T33.
+**Requirement**: LOOP-06
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [x] The delete-and-resume claim states what actually happens: deleting `loop.json` prints `phase=0 action=bootstrap`, and the same next task is named after re-bootstrapping. Corrected wherever it appears, including the spec's Independent Test where it originated
+- [x] `references/state-schema.md` stops contradicting itself: it names every field git cannot rebuild, `verified_at` among them, instead of claiming the file holds nothing durable
+- [x] `README.md`'s halt list is covered by the parity test, so a fourth copy cannot drift
+- [x] The prose-criteria count in `README.md` matches the Verifier's re-derived figure
+- [x] `verified_at` is asserted in `test_unit_update_loop.py` and `_gitio.head_commit` has unit tests, so stripping the stamp or writing a wrong one fails the Quick gate T34 declares
+- [x] The full suite stays green
+
+**Tests**: unit
 **Gate**: build

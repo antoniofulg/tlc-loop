@@ -77,11 +77,16 @@ git log --reverse --format="%(trailers:key=Task,valueonly)"
 
 Git is authoritative. If a `tasks.md` tick and git history disagree, git wins
 and the override lands in `reconciled` below rather than passing silently.
-This is exactly what makes the file disposable: delete `loop.json`
-mid-run and the next detect still names the same next task, because progress
-was never stored here.
+This is what makes the file disposable *for task progress*: delete `loop.json`
+mid-run and the next detect prints `phase=0 action=bootstrap`; re-bootstrap and
+it names the same task, because progress was never stored here.
 
-The one exception is `no_diff_tasks`, below - the single piece of completion
+Three fields are not reconstructible and are lost with the file: `objective`
+(re-supplied at bootstrap), the `counters`, and `verify.verified_at` - so a
+rebuilt state owes one verification round. Deleting the file costs those, never
+task progress.
+
+The first of the three is `no_diff_tasks`, below - the piece of completion
 state git cannot express.
 
 ---
