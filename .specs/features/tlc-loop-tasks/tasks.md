@@ -434,7 +434,7 @@ T28
 
 ---
 
-### T13: Document the state schema
+### T13: Document the state schema ✅
 
 **What**: Reference specifying every `loop.json` field, its meaning, and the single-writer invariants.
 **Where**: `references/state-schema.md`
@@ -449,10 +449,15 @@ T28
 
 **Done when**:
 
-- [ ] Every field written by T10 or T12 is documented with type and meaning
-- [ ] The invariants are stated: single writer, append-only capped log, immutable objective, no stored current phase
-- [ ] It is stated explicitly that completed tasks are absent by design and derived from git
-- [ ] No field is documented that the implementation does not write
+- [x] Every field written by T10 or T12 is documented with type and meaning
+- [x] The invariants are stated: single writer, append-only capped log, immutable objective, no stored current phase
+- [x] It is stated explicitly that completed tasks are absent by design and derived from git
+- [x] No field is documented that the implementation does not write
+
+> Field parity was checked mechanically against a bootstrapped-then-updated
+> state file, not against the design doc: written-but-undocumented is empty,
+> and documented-but-unwritten contains only `status` / `halt.reason` enum
+> values, all of which `update_loop.py` accepts.
 
 **Tests**: none
 **Gate**: build
