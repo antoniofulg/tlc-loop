@@ -133,7 +133,7 @@ T26
 
 ---
 
-### T2: loop.json state codec
+### T2: loop.json state codec ✅
 
 **What**: Strict load/save codec for `loop.json` - the only module that touches the state file.
 **Where**: `scripts/_state_io.py`
@@ -148,11 +148,11 @@ T26
 
 **Done when**:
 
-- [ ] `load(feature, root)` parses `loop.json` and raises a descriptive error on malformed JSON or a schema violation
-- [ ] `save(feature, root, state)` writes atomically (temp file plus rename) with `indent=2` and sorted keys
-- [ ] `new_state(feature, objective, harness)` returns the documented initial shape
-- [ ] Schema validation rejects an unknown `status` value and a missing required key
-- [ ] Unit tests cover: round trip, malformed JSON raising, schema violation raising, and atomicity (no partial file left when the write fails)
+- [x] `load(feature, root)` parses `loop.json` and raises a descriptive error on malformed JSON or a schema violation
+- [x] `save(feature, root, state)` writes atomically (temp file plus rename) with `indent=2` and sorted keys
+- [x] `new_state(feature, objective, harness)` returns the documented initial shape
+- [x] Schema validation rejects an unknown `status` value and a missing required key
+- [x] Unit tests cover: round trip, malformed JSON raising, schema violation raising, and atomicity (no partial file left when the write fails)
 
 **Tests**: unit
 **Gate**: quick
