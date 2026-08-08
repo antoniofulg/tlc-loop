@@ -24,9 +24,12 @@ Output vocabulary (exactly one of these, on stdout):
     phase=E action=done
     phase=H action=halt reason=<slug> detail="<text>"
 
+An unreadable `loop.json` is not one of those failures: it is a halt with
+`reason=state_corrupt`, printed on stdout like any other phase line.
+
 Exit codes: 0 the line describes the situation, 1 the situation could not be
-read (unparseable state or config, missing tasks.md, no repository, sibling
-skill missing) with the reason on stderr and nothing on stdout.
+read (unparseable config, missing tasks.md, no repository, sibling skill
+missing) with the reason on stderr and nothing on stdout.
 """
 
 import argparse
@@ -112,10 +115,23 @@ def main(argv=None):
         print("phase=0 action=bootstrap")
         return 0
 
+    # 1b. The state file exists but cannot be read. That is a situation, not a
+    #     script failure: it is reported in the same phase vocabulary as every
+    #     other stop, so no consumer has to special-case a raw exit code.
+    #     Reconstructing from git instead would silently discard the immutable
+    #     objective, which is why an unreadable file halts where an absent one
+    #     bootstraps (LOOP-01 AC 3 and AC 4).
     try:
         state = _state_io.load(feature, root)
+    except _state_io.StateError as exc:
+        print(f"phase=H action=halt reason=state_corrupt detail={_quote(exc)}")
+        return 0
+
+    # The config is user-owned rather than machine state, so a malformed one is
+    # a plain error the user fixes by editing the file.
+    try:
         config = _config.load_config(root)
-    except (_state_io.StateError, _config.ConfigError) as exc:
+    except _config.ConfigError as exc:
         print(f"detect_phase: {exc}", file=sys.stderr)
         return 1
 

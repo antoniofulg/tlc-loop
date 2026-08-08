@@ -60,7 +60,7 @@ Every line the implementation can print, with the condition that produces it.
   `verify.rounds`. A fix belongs to the round that found the gaps, so `V round=2`
   following `F round=1` reads as one cycle rather than two.
 - `reason=<slug>` is one of `no_progress`, `gate_stuck`, `executor`, `limit`,
-  `blocker`, `blast_radius`.
+  `blocker`, `blast_radius`, `state_corrupt`.
 - `detail="<text>"` is always present on a halt line, always double quoted,
   always a single line. Internal double quotes become single quotes and runs of
   whitespace collapse, so the line stays parseable by a shell driver.
@@ -73,7 +73,9 @@ Each step runs only if the previous one did not print. This order is the
 contract, not an implementation detail.
 
 1. **No `loop.json`** → `phase=0`. Nothing else is read.
-2. **Load `loop.json` and `loop.config.toml`.** Either failing to parse exits 1.
+2. **Load `loop.json`.** Unreadable → `phase=H reason=state_corrupt`, with the
+   codec's own message as the detail. Then load `loop.config.toml`; that one
+   failing to parse exits 1.
 3. **Halt check** → `phase=H`. See the precedence below.
 4. **Derive what is done.** `git log --reverse --format="%(trailers:key=Task,valueonly)"`,
    deduped, unioned with `no_diff_tasks` from `loop.json`.
@@ -101,6 +103,30 @@ never mark a task incomplete that git says is complete.
 
 A duplicate `Task:` trailer, which a rebase or cherry-pick can leave behind,
 counts once. The duplication is reported rather than dropped.
+
+### Absent state bootstraps, unreadable state halts
+
+Step 1 and step 2 look similar and are deliberately opposite.
+
+An **absent** `loop.json` costs counters and the objective, never task
+progress: bootstrap writes a fresh file and the next detect re-derives the same
+next task from git and `tasks.md`. Reconstruction is safe because nothing was
+lost that git does not already hold.
+
+An **unreadable** one is different. The bytes exist, so something is in there -
+possibly the objective a run has been driving toward for eight hours - and the
+codec cannot tell a truncated write from a hand edit. Overwriting it with a
+reconstruction would discard that silently. So the run stops:
+`phase=H action=halt reason=state_corrupt detail="<the codec's message>"`.
+
+Unreadable means anything `_state_io.load` rejects: malformed JSON, a missing
+required key, an unknown `status`. All of them mean the same thing operationally
+- the state cannot be read - so they carry one reason. Deleting the file
+deliberately is the documented way out, and it lands on the absent branch above.
+
+The halt exits 0 like every other phase line. A raw non-zero exit here would
+force `loop.sh`, a goal evaluator, and the in-turn motor to each special-case
+one situation the vocabulary already covers.
 
 ### Halt is checked first
 
@@ -160,9 +186,14 @@ Two of these deserve emphasis:
 | `0` | A line was printed describing the situation. Includes `phase=H`: a halt is a described situation, not a script failure. |
 | `1` | The situation could not be read. Nothing on stdout, reason on stderr. |
 
-Exit 1 covers: `loop.json` unparseable or violating its schema,
-`loop.config.toml` unparseable, `tasks.md` missing, the root not being a git
-repository, and the sibling `tlc-spec-driven` skill not being resolvable.
+Exit 1 covers: `loop.config.toml` unparseable, `tasks.md` missing, the root not
+being a git repository, and the sibling `tlc-spec-driven` skill not being
+resolvable. All four are the user's files or the user's install, fixed by
+editing something outside the run.
+
+`loop.json` being unparseable is **not** in that list. It is machine state, so
+it belongs to the run, and it is reported as `phase=H reason=state_corrupt`
+with exit 0.
 
 A halt is deliberately not an exit code. `loop.sh`, a goal evaluator, and the
 in-turn motor all read the same one-line contract, so a halt reason expressed

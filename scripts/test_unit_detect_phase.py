@@ -5,6 +5,9 @@ Derived from T8's "Done when" criteria and:
     before any work
   - LOOP-01 AC 2: completed tasks read from git trailers, authoritative over
     loop.json
+  - LOOP-01 AC 3: an absent loop.json reconstructs from git and tasks.md
+  - LOOP-01 AC 4: an unparseable loop.json halts with
+    `phase=H reason=state_corrupt` rather than reconstructing (T28)
   - LOOP-06 AC 6/7/8: halt on no progress, on a stuck gate, and on a
     configured iteration or minute limit
 
@@ -202,6 +205,30 @@ class Bootstrap(DetectPhaseCase):
         self.assertEqual(self.line(), "phase=0 action=bootstrap")
 
 
+class AbsentState(DetectPhaseCase):
+    """T28 / LOOP-01 AC 3: an absent state file reconstructs, it does not halt."""
+
+    def test_an_absent_state_file_does_not_halt(self):
+        self.complete("T1", "T2", "T3")
+        self.assertNotIn("phase=H", self.line())
+
+    def test_deleting_the_state_file_costs_no_task_progress(self):
+        # The spec's independent test: delete loop.json mid-feature and the
+        # loop must still name the task git history implies. Bootstrap writes a
+        # fresh state (no completed tasks in it), and the next detect
+        # reconstructs the same answer from git plus tasks.md.
+        self.write_state()
+        self.complete("T1", "T2", "T3")
+        before = self.line()
+        self.assertEqual(before, "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6")
+
+        os.unlink(self.state_path())
+        self.assertEqual(self.line(), "phase=0 action=bootstrap")
+
+        self.write_state()  # exactly what init_loop.py writes
+        self.assertEqual(self.line(), before)
+
+
 class ExecuteBatch(DetectPhaseCase):
     def test_pending_tasks_print_the_packed_batch_and_explicit_ids(self):
         self.write_state()
@@ -343,21 +370,53 @@ class ReadOnly(DetectPhaseCase):
         self.assertEqual(self.line(), self.line())
 
 
-class ErrorPaths(DetectPhaseCase):
-    def test_malformed_loop_json_exits_one_with_the_parse_error(self):
+class CorruptState(DetectPhaseCase):
+    """T28 / LOOP-01 AC 4: unreadable state halts in the phase vocabulary.
+
+    An existing `loop.json` the codec cannot read is not a script failure, it
+    is a situation: it is reported as `phase=H reason=state_corrupt` so every
+    consumer of the contract reads one vocabulary instead of special-casing a
+    raw exit code. Reconstructing instead would silently discard the immutable
+    objective.
+    """
+
+    def corrupt(self, text="{ not json"):
         with open(self.state_path(), "w", encoding="utf-8") as fh:
-            fh.write("{ not json")
-        proc = self.detect()
-        self.assertEqual(proc.returncode, 1)
-        self.assertEqual(proc.stdout, "")
-        self.assertIn("malformed JSON", proc.stderr)
+            fh.write(text)
 
-    def test_a_schema_violation_exits_one(self):
+    def test_malformed_loop_json_halts_with_state_corrupt(self):
+        self.corrupt()
+        self.assertTrue(
+            self.line().startswith("phase=H action=halt reason=state_corrupt "), self.line()
+        )
+
+    def test_the_parse_error_travels_as_the_detail(self):
+        self.corrupt()
+        line = self.line()
+        self.assertIn("malformed JSON", line)
+        self.assertIn('detail="', line)
+
+    def test_the_halt_exits_zero_with_nothing_on_stderr(self):
+        self.corrupt()
+        proc = self.detect()
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stderr, "")
+
+    def test_a_schema_violation_halts_with_the_same_reason(self):
         self.write_state(status="sleepy")
-        proc = self.detect()
-        self.assertEqual(proc.returncode, 1)
-        self.assertIn("sleepy", proc.stderr)
+        line = self.line()
+        self.assertTrue(
+            line.startswith("phase=H action=halt reason=state_corrupt "), line
+        )
+        self.assertIn("sleepy", line)
 
+    def test_corrupt_state_is_never_reconstructed_into_work(self):
+        # T1..T6 are all pending, so without the halt this would be phase=B.
+        self.corrupt()
+        self.assertNotIn("phase=B", self.line())
+
+
+class ErrorPaths(DetectPhaseCase):
     def test_a_missing_tasks_md_exits_one_naming_the_path(self):
         self.write_state()
         os.unlink(os.path.join(self.feature_dir, "tasks.md"))

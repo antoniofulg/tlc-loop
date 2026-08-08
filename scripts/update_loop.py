@@ -36,8 +36,10 @@ import _state_io  # noqa: E402
 #: The iteration log keeps this many of the most recent entries.
 LOG_LIMIT = 50
 
-#: Halt reasons `detect_phase.py` can print. `state_corrupt` is absent on
-#: purpose: it is derived when the state cannot be read, so it is never stored.
+#: Halt reasons `detect_phase.py` can print, so one vocabulary covers both the
+#: recorded halts and the derived ones. `state_corrupt` is derived - the state
+#: could not be read, so in practice it cannot be written back either - but it
+#: is listed here because the constant is the vocabulary, not the storage.
 HALT_REASONS = (
     "no_progress",
     "gate_stuck",
@@ -45,6 +47,7 @@ HALT_REASONS = (
     "limit",
     "blocker",
     "blast_radius",
+    "state_corrupt",
 )
 
 VERDICTS = ("PASS", "FAIL")

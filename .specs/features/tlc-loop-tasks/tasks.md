@@ -898,7 +898,7 @@ T30
 
 ---
 
-### T28: Halt on corrupt state instead of exiting raw
+### T28: Halt on corrupt state instead of exiting raw ✅
 
 **What**: Make `detect_phase.py` report an unparseable `loop.json` as `phase=H reason=state_corrupt` rather than a bare non-zero exit.
 **Where**: `scripts/detect_phase.py`
@@ -913,11 +913,19 @@ T30
 
 **Done when**:
 
-- [ ] An unparseable `loop.json` prints `phase=H action=halt reason=state_corrupt` with the parse error as `detail`
-- [ ] An absent `loop.json` still reconstructs from git and `tasks.md`, unchanged
-- [ ] Every consumer of the detect contract sees one vocabulary: no caller needs to special-case a raw exit code
-- [ ] `references/phase-transitions.md` documents `state_corrupt` alongside the other halt reasons
-- [ ] Unit tests cover both branches: absent reconstructs, corrupt halts with the reason
+- [x] An unparseable `loop.json` prints `phase=H action=halt reason=state_corrupt` with the parse error as `detail`
+- [x] An absent `loop.json` still reconstructs from git and `tasks.md`, unchanged
+- [x] Every consumer of the detect contract sees one vocabulary: no caller needs to special-case a raw exit code
+- [x] `references/phase-transitions.md` documents `state_corrupt` alongside the other halt reasons
+- [x] Unit tests cover both branches: absent reconstructs, corrupt halts with the reason
+
+> Unreadable means anything `_state_io.load` rejects - malformed JSON, a
+> missing key, an unknown `status` - not only a JSON syntax error. All of them
+> mean the state cannot be read, so they carry one reason. The two tests that
+> asserted the old raw exit 1 were replaced: spec AC 4 now forbids it.
+>
+> A malformed `loop.config.toml` still exits 1. Config is the user's file, not
+> machine state, and fixing it happens outside the run.
 
 **Tests**: unit
 **Gate**: quick
