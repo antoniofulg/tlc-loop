@@ -96,6 +96,16 @@ T21 -> T23
 T24
 ```
 
+### Phase 8: Verifier round 1 fixes
+
+Gaps the independent Verifier found. Each closes a specific ranked finding.
+
+```
+T31
+T32
+T33
+```
+
 ### Phase 7: Integration and hardening
 
 ```
@@ -1056,6 +1066,83 @@ T30
 > more directories, so a feature directly under `features/` matches too.
 > `git ls-files -i -c --exclude-standard` is empty, so nothing already tracked
 > became ignored.
+
+**Tests**: unit
+**Gate**: quick
+
+---
+
+### T31: Record git-versus-tasks.md reconciliation
+
+**What**: Persist the reconciliation when git history and `tasks.md` disagree about a task, closing the unimplemented half of LOOP-01 AC 5.
+**Where**: `scripts/update_loop.py`
+**Depends on**: None
+**Reuses**: `_state_io` schema; the disagreement `detect_phase.py` already computes.
+**Requirement**: LOOP-01
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [ ] `loop.json` carries a durable record of each reconciliation, written only through `update_loop.py`
+- [ ] The record names the task and which side won, so a later reader can tell git overrode the plan
+- [ ] `detect_phase.py` stays read-only and surfaces the disagreement in its printed line so the orchestrator can record it
+- [ ] Recording the same reconciliation twice does not duplicate the entry
+- [ ] `references/state-schema.md` documents the field
+- [ ] Unit tests cover: a disagreement recorded, the field surviving a load/save round trip, and idempotence
+
+**Tests**: unit
+**Gate**: quick
+
+---
+
+### T32: Report duplicate trailer ambiguity instead of dropping it
+
+**What**: Consume the duplicate-trailer signal `_gitio.completed_tasks` already returns, which `detect_phase.py` currently binds and discards.
+**Where**: `scripts/detect_phase.py`
+**Depends on**: None
+**Reuses**: The duplicates list `_gitio.completed_tasks` already produces.
+**Requirement**: LOOP-02
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [ ] A duplicated `Task:` trailer is surfaced by `detect_phase.py`, not discarded
+- [ ] The task still counts as completed exactly once, per the spec edge case
+- [ ] `references/phase-transitions.md`'s claim that duplication is reported becomes true of the code
+- [ ] Unit tests cover: a duplicated trailer surfaced, and a clean history surfacing nothing
+
+**Tests**: unit
+**Gate**: quick
+
+---
+
+### T33: Gate the halt-reason enumeration against the code
+
+**What**: Replace the one-time manual enum check with a test, so `SKILL.md`'s halt list cannot drift from `update_loop.HALT_REASONS` again.
+**Where**: `scripts/test_unit_docs_parity.py`
+**Depends on**: None
+**Reuses**: `update_loop.HALT_REASONS` as the single source of truth.
+**Requirement**: LOOP-06
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [ ] A test fails when `SKILL.md`'s documented halt reasons differ in either direction from `update_loop.HALT_REASONS`
+- [ ] The test currently fails against the stale list, then passes once `SKILL.md` is corrected to include `state_corrupt` and `verify_exhausted`
+- [ ] The failure message names the missing or extra reason, not just that the sets differ
+- [ ] The same parity idea covers `references/phase-transitions.md` if it enumerates reasons too
 
 **Tests**: unit
 **Gate**: quick
