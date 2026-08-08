@@ -96,6 +96,14 @@ T21 -> T23
 T24
 ```
 
+### Phase 9: Stale-verification gap
+
+Found by dogfooding the loop on its own repository.
+
+```
+T34
+```
+
 ### Phase 8: Verifier round 1 fixes
 
 Gaps the independent Verifier found. Each closes a specific ranked finding.
@@ -1148,6 +1156,33 @@ T30
 - [x] The same parity idea covers `references/phase-transitions.md` if it enumerates reasons too
 
 **Red then green**: against the stale list the new test failed with `SKILL.md does not document halt reason(s) the code implements: state_corrupt, verify_exhausted`; correcting `SKILL.md` turned it green. `references/phase-transitions.md` was already in parity and passed from the first run.
+
+**Tests**: unit
+**Gate**: quick
+
+---
+
+### T34: Refuse a PASS that predates the code
+
+**What**: Make `detect_phase.py` treat a verification report older than the last commit as unverified, instead of printing `phase=E`.
+**Where**: `scripts/detect_phase.py`
+**Depends on**: None
+**Reuses**: `verify.last_report` in `loop.json`; the diff range `validation.md` already records.
+**Requirement**: LOOP-04
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [ ] A PASS report is accepted only while HEAD matches the commit the verification covered
+- [ ] A commit landing after a PASS returns detection to `phase=V` rather than `phase=E`
+- [ ] The commit a verification covered is recorded by `update_loop.py --verify-round`, so the comparison needs no parsing of `validation.md`
+- [ ] A report for a feature never verified still yields `phase=V`, unchanged
+- [ ] `references/phase-transitions.md` documents the staleness rule in the derivation order
+- [ ] Unit tests cover: fresh PASS reaches `E`, PASS plus a later commit returns to `V`, and no report yields `V`
 
 **Tests**: unit
 **Gate**: quick
