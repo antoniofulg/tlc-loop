@@ -159,7 +159,7 @@ T26
 
 ---
 
-### T3: TOML config reader with defaults
+### T3: TOML config reader with defaults ✅
 
 **What**: Parse `.specs/loop.config.toml` with stdlib `tomllib` and apply documented defaults for every absent key.
 **Where**: `scripts/_config.py`
@@ -174,11 +174,11 @@ T26
 
 **Done when**:
 
-- [ ] `load_config(root)` returns a fully-defaulted config when the file is absent
-- [ ] An omitted key under `[limits]` resolves to unlimited, matching the documented TOML-has-no-null rule
-- [ ] A malformed TOML file raises with the parse error and the file path
-- [ ] An unknown `effort` value is rejected at load time with the offending stage named
-- [ ] Unit tests cover: absent file, partial file, malformed file, unknown effort, and the unlimited-by-omission rule
+- [x] `load_config(root)` returns a fully-defaulted config when the file is absent
+- [x] An omitted key under `[limits]` resolves to unlimited, matching the documented TOML-has-no-null rule
+- [x] A malformed TOML file raises with the parse error and the file path
+- [x] An unknown `effort` value is rejected at load time with the offending stage named
+- [x] Unit tests cover: absent file, partial file, malformed file, unknown effort, and the unlimited-by-omission rule
 
 **Tests**: unit
 **Gate**: quick
