@@ -1,0 +1,105 @@
+# tlc-loop-tasks - example configuration
+#
+# Copy to `.specs/loop.config.toml` in your project root and edit.
+#
+# The whole file is optional, and so is every key in it: an absent key resolves
+# to the default noted beside it. Full reference: references/config-schema.md.
+#
+# This file is yours. The loop reads it and never writes it - runtime-resolved
+# values go to `.specs/features/<feature>/loop.json` instead.
+#
+# The setup below is the one this skill exists for: a cheap implementer paired
+# with a high-reasoning verifier, on two different vendors.
+
+version = 1 # default: 1
+
+
+# --- Stages -----------------------------------------------------------------
+#
+# Three stages, resolved independently: implement, verify, fix.
+#
+#   provider  default "auto" - the harness detected at bootstrap
+#   model     default absent - leaves the provider's own default in place
+#   effort    default absent - low | medium | high | xhigh | max
+#
+# `ultra` is accepted by no provider and is rejected when this file loads.
+# Whether a specific provider accepts a specific effort is checked later,
+# against references/providers.md.
+
+# The implementer writes most of the code, so it is the expensive stage to run
+# on a premium tier. codex also has the cleanest evidence channel: a real file.
+[stages.implement]
+provider = "codex"
+model = "gpt-5.6-luna"
+effort = "max"
+
+# The verifier decides whether the feature is done. It is worth the better
+# model, and it must not be the implementer: author is not verifier.
+[stages.verify]
+provider = "claude"
+model = "opus"
+effort = "high"
+
+# The fix stage consumes the verifier's ranked gaps. A different executor from
+# the verifier, which is why fix is its own phase.
+[stages.fix]
+provider = "codex"
+model = "gpt-5.6-luna"
+effort = "max"
+
+
+# --- Execution --------------------------------------------------------------
+
+[execute]
+batch_size = 7 # default: 7. Whole phases are packed up to this many tasks.
+
+[verify]
+max_rounds = 3 # default: 3. Not a [limits] key: omitting it gives 3, not unlimited.
+
+
+# --- Continuation -----------------------------------------------------------
+
+[continue]
+in_turn = true # default: true. Re-enter detection in the same turn.
+mode = "auto"  # default: "auto". auto | goal | shell | none
+
+# The agent spawned to start the next turn, when continuation needs a new one.
+# Same three keys as a stage.
+[continue.respawn]
+provider = "auto" # default: "auto" - detected at bootstrap; explicit always wins
+model = "opus"
+effort = "high"
+
+
+# --- Limits -----------------------------------------------------------------
+#
+# TOML has no null, so there is no way to write "no limit" as a value.
+# An omitted key here means UNLIMITED. A limit applies only when written down.
+#
+# The two below are the runaway detectors. Set them before leaving a run
+# unattended: without them a broken loop spins all night looking healthy.
+
+[limits]
+no_progress_iterations = 3    # halt after 3 iterations with no new commit
+gate_attempts_per_task = 3    # halt when one task's gate has failed 3 times
+executor_timeout_seconds = 1800 # kill an executor after 30 minutes; a timeout is a failure
+
+# Both of these are commented out, so both are unlimited. That is the only way
+# to express it - there is no `max_iterations = null`.
+# max_iterations = 200
+# max_minutes = 480
+
+
+# --- Custom providers -------------------------------------------------------
+#
+# Optional. Declares a CLI the built-in adapter table does not cover, or
+# overrides the command line for one it does. Placeholders {model}, {effort},
+# {repo}, {evidence}, and {prompt} are substituted at stage resolution; a
+# leftover placeholder is an error, never passed through.
+#
+# This is also how you use herdr, or any other orchestrator, as an executor.
+# It is one ordinary `command` provider, with no special case anywhere.
+#
+# [providers.myagent]
+# kind = "command"
+# command = "myagent run --repo {repo} --model {model} --out {evidence} {prompt}"

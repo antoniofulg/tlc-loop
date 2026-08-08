@@ -758,7 +758,7 @@ T28
 
 ---
 
-### T24: Example configuration
+### T24: Example configuration ✅
 
 **What**: A commented starter `loop.config.toml` a user can copy and edit.
 **Where**: `assets/loop.config.example.toml`
@@ -773,10 +773,18 @@ T28
 
 **Done when**:
 
-- [ ] Every key from `references/config-schema.md` appears, commented with its default
-- [ ] The example shows a cross-provider setup: a cheap implementer with a high-reasoning verifier
-- [ ] `tomllib` parses the file without error
-- [ ] The unlimited-by-omission rule is shown by example
+- [x] Every key from `references/config-schema.md` appears, commented with its default
+- [x] The example shows a cross-provider setup: a cheap implementer with a high-reasoning verifier
+- [x] `tomllib` parses the file without error
+- [x] The unlimited-by-omission rule is shown by example
+
+> Proven by running, not asserted: `tomllib.load` succeeds, and so does
+> `_config.load_config`, which is stricter because it also validates `effort`.
+> Key parity was checked mechanically against `_config.LIMIT_KEYS` and the
+> schema reference. `implement` resolves to codex and `verify` to claude.
+> `max_iterations` and `max_minutes` are the two keys left commented out, and
+> both parse to `None`, which is the unlimited-by-omission rule demonstrated
+> rather than described.
 
 **Tests**: none
 **Gate**: build
