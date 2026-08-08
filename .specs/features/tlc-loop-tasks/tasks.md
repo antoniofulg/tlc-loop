@@ -288,7 +288,7 @@ T26
 
 ---
 
-### T8: Phase detection entrypoint
+### T8: Phase detection entrypoint ✅
 
 **What**: The read-only CLI that prints exactly one phase line derived from git, `tasks.md`, and state.
 **Where**: `scripts/detect_phase.py`
@@ -303,15 +303,15 @@ T26
 
 **Done when**:
 
-- [ ] Exactly one line is printed per invocation, from the documented vocabulary
-- [ ] Absent `loop.json` prints `phase=0 action=bootstrap`
-- [ ] Completed tasks come from git trailers unioned with `no_diff_tasks`, and git wins over any conflicting state
-- [ ] Pending tasks remaining prints `phase=B` with the packed batch and explicit task IDs
-- [ ] No pending tasks and no PASS report prints `phase=V`, or `phase=F` when the last verdict was FAIL with gaps open
-- [ ] `validate_state.py` exiting 0 prints `phase=E`
-- [ ] A met halt condition prints `phase=H` with a reason slug, checked before any work is described
-- [ ] The script performs no writes: a run leaves `git status --porcelain` and `loop.json` byte-identical
-- [ ] Unit tests cover every output variant and assert the no-write property
+- [x] Exactly one line is printed per invocation, from the documented vocabulary
+- [x] Absent `loop.json` prints `phase=0 action=bootstrap`
+- [x] Completed tasks come from git trailers unioned with `no_diff_tasks`, and git wins over any conflicting state
+- [x] Pending tasks remaining prints `phase=B` with the packed batch and explicit task IDs
+- [x] No pending tasks and no PASS report prints `phase=V`, or `phase=F` when the last verdict was FAIL with gaps open
+- [x] `validate_state.py` exiting 0 prints `phase=E`
+- [x] A met halt condition prints `phase=H` with a reason slug, checked before any work is described
+- [x] The script performs no writes: a run leaves `git status --porcelain` and `loop.json` byte-identical
+- [x] Unit tests cover every output variant and assert the no-write property
 
 **Tests**: unit
 **Gate**: quick

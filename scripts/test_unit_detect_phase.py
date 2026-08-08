@@ -1,0 +1,377 @@
+"""Unit tests for detect_phase.py (T8, LOOP-01).
+
+Derived from T8's "Done when" criteria and:
+  - LOOP-01 AC 1: exactly one phase line describing the next action, printed
+    before any work
+  - LOOP-01 AC 2: completed tasks read from git trailers, authoritative over
+    loop.json
+  - LOOP-06 AC 6/7/8: halt on no progress, on a stuck gate, and on a
+    configured iteration or minute limit
+
+Each test builds a throwaway skill layout - this skill plus a sibling
+`tlc-spec-driven` - and a separate tmpdir git repo, then runs the script as a
+subprocess. The sibling's `validate_state.py` is a stub honouring its documented
+contract (exit 0 only on a filled PASS report); the real validator is mutation
+tested separately.
+"""
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+
+SCRIPTS = os.path.dirname(os.path.abspath(__file__))
+FENCE = "```"
+
+TASKS_MD = f"""# demo Tasks
+
+## Test Coverage Matrix
+
+## Gate Check Commands
+
+## Execution Plan
+
+### Phase 1: Foundation
+
+{FENCE}
+T1 -> T2 -> T3
+{FENCE}
+
+### Phase 2: Detection
+
+{FENCE}
+T4 -> T5 -> T6
+{FENCE}
+
+## Task Breakdown
+
+### T1: One
+**Tests**: unit
+**Gate**: quick
+
+### T2: Two
+**Tests**: unit
+**Gate**: quick
+
+### T3: Three
+**Tests**: unit
+**Gate**: quick
+
+### T4: Four
+**Tests**: unit
+**Gate**: quick
+
+### T5: Five
+**Tests**: unit
+**Gate**: quick
+
+### T6: Six
+**Tests**: unit
+**Gate**: quick
+"""
+
+# Honours validate_state.py's contract: a report must exist and hold a filled
+# PASS verdict. Anything else is "not done".
+VALIDATE_STATE_STUB = '''#!/usr/bin/env python3
+import os, sys
+feature = sys.argv[1]
+root = sys.argv[sys.argv.index("--root") + 1] if "--root" in sys.argv else "."
+path = os.path.join(root, ".specs", "features", feature, "validation.md")
+if not os.path.exists(path):
+    sys.exit(1)
+text = open(path, encoding="utf-8").read()
+sys.exit(0 if "PASS" in text and "FAIL" not in text else 1)
+'''
+
+
+def _git(root, *args):
+    proc = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise AssertionError(f"git {' '.join(args)} failed: {proc.stderr}")
+    return proc.stdout
+
+
+class DetectPhaseCase(unittest.TestCase):
+    """Builds the skill layout and the project repo, then drives the script."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        base = self.tmp.name
+
+        self.skill_scripts = os.path.join(base, "skills", "tlc-loop-tasks", "scripts")
+        os.makedirs(self.skill_scripts)
+        for name in os.listdir(SCRIPTS):
+            if name.endswith(".py") and not name.startswith("test_"):
+                shutil.copyfile(
+                    os.path.join(SCRIPTS, name), os.path.join(self.skill_scripts, name)
+                )
+
+        tlc_scripts = os.path.join(base, "skills", "tlc-spec-driven", "scripts")
+        os.makedirs(tlc_scripts)
+        with open(os.path.join(tlc_scripts, "validate_state.py"), "w", encoding="utf-8") as fh:
+            fh.write(VALIDATE_STATE_STUB)
+
+        self.root = os.path.join(base, "project")
+        self.feature_dir = os.path.join(self.root, ".specs", "features", "demo")
+        os.makedirs(self.feature_dir)
+        with open(os.path.join(self.feature_dir, "tasks.md"), "w", encoding="utf-8") as fh:
+            fh.write(TASKS_MD)
+
+        _git(self.root, "init", "-q", "-b", "main")
+        _git(self.root, "config", "user.email", "loop@test.invalid")
+        _git(self.root, "config", "user.name", "Loop Test")
+        _git(self.root, "config", "commit.gpgsign", "false")
+        self.commit("chore: seed", "seed.txt")
+
+    # ---- fixture helpers -------------------------------------------------
+
+    def commit(self, message, filename, task=None):
+        with open(os.path.join(self.root, filename), "w", encoding="utf-8") as fh:
+            fh.write(filename)
+        _git(self.root, "add", "-A")
+        args = ["commit", "-q", "-m", message]
+        if task:
+            args += ["--trailer", f"Task: {task}", "--trailer", "Gate: quick PASS"]
+        _git(self.root, *args)
+
+    def complete(self, *task_ids):
+        for task_id in task_ids:
+            self.commit(f"feat: {task_id.lower()}", f"{task_id.lower()}.txt", task=task_id)
+
+    def state_path(self):
+        return os.path.join(self.feature_dir, "loop.json")
+
+    def write_state(self, **overrides):
+        sys.path.insert(0, SCRIPTS)
+        import _state_io
+
+        state = _state_io.new_state("demo", "ship demo", "claude")
+        for key, value in overrides.items():
+            if isinstance(value, dict) and isinstance(state.get(key), dict):
+                state[key].update(value)
+            else:
+                state[key] = value
+        with open(self.state_path(), "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(state, indent=2, sort_keys=True) + "\n")
+        return state
+
+    def write_config(self, text):
+        specs = os.path.join(self.root, ".specs")
+        os.makedirs(specs, exist_ok=True)
+        with open(os.path.join(specs, "loop.config.toml"), "w", encoding="utf-8") as fh:
+            fh.write(text)
+
+    def write_validation(self, text):
+        with open(os.path.join(self.feature_dir, "validation.md"), "w", encoding="utf-8") as fh:
+            fh.write(text)
+
+    # ---- driver ----------------------------------------------------------
+
+    def detect(self):
+        return subprocess.run(
+            [
+                sys.executable,
+                os.path.join(self.skill_scripts, "detect_phase.py"),
+                "demo",
+                "--root",
+                self.root,
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+    def line(self):
+        """Run, require exit 0 and exactly one stdout line, and return it."""
+        proc = self.detect()
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        lines = proc.stdout.splitlines()
+        self.assertEqual(len(lines), 1, f"expected exactly one line, got {lines!r}")
+        return lines[0]
+
+
+class Bootstrap(DetectPhaseCase):
+    def test_absent_loop_json_prints_bootstrap(self):
+        self.assertEqual(self.line(), "phase=0 action=bootstrap")
+
+    def test_bootstrap_is_printed_even_before_any_commit_exists(self):
+        self.assertFalse(os.path.exists(self.state_path()))
+        self.assertEqual(self.line(), "phase=0 action=bootstrap")
+
+
+class ExecuteBatch(DetectPhaseCase):
+    def test_pending_tasks_print_the_packed_batch_and_explicit_ids(self):
+        self.write_state()
+        self.assertEqual(
+            self.line(),
+            "phase=B action=execute_batch batch=P1+P2 tasks=T1,T2,T3,T4,T5,T6",
+        )
+
+    def test_the_batch_honours_the_configured_batch_size(self):
+        self.write_state()
+        self.write_config("[execute]\nbatch_size = 2\n")
+        self.assertEqual(
+            self.line(), "phase=B action=execute_batch batch=P1 tasks=T1,T2,T3"
+        )
+
+    def test_completed_tasks_come_from_git_trailers(self):
+        self.write_state()
+        self.complete("T1", "T2", "T3")
+        self.assertEqual(
+            self.line(), "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6"
+        )
+
+    def test_no_diff_tasks_are_unioned_with_the_git_trailers(self):
+        self.write_state(no_diff_tasks=["T4"])
+        self.complete("T1", "T2", "T3")
+        self.assertEqual(self.line(), "phase=B action=execute_batch batch=P2 tasks=T5,T6")
+
+    def test_git_wins_over_conflicting_state(self):
+        # loop.json still claims T1 is the task in flight and T1..T3 are the
+        # current batch; git says all three are committed, and git decides.
+        self.write_state(current_task="T1", current_batch=["T1", "T2", "T3"])
+        self.complete("T1", "T2", "T3")
+        self.assertEqual(
+            self.line(), "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6"
+        )
+
+
+class Verify(DetectPhaseCase):
+    def test_no_pending_and_no_report_prints_verify_round_one(self):
+        self.write_state()
+        self.complete("T1", "T2", "T3", "T4", "T5", "T6")
+        self.assertEqual(self.line(), "phase=V action=verify round=1")
+
+    def test_the_round_number_follows_the_recorded_rounds(self):
+        self.write_state(verify={"rounds": 2, "last_verdict": "FAIL", "gaps_open": 0})
+        self.complete("T1", "T2", "T3", "T4", "T5", "T6")
+        self.assertEqual(self.line(), "phase=V action=verify round=3")
+
+    def test_a_fail_verdict_with_no_open_gaps_returns_to_verify(self):
+        self.write_state(verify={"rounds": 1, "last_verdict": "FAIL", "gaps_open": 0})
+        self.complete("T1", "T2", "T3", "T4", "T5", "T6")
+        self.assertEqual(self.line(), "phase=V action=verify round=2")
+
+
+class Fix(DetectPhaseCase):
+    def test_a_fail_verdict_with_open_gaps_prints_fix(self):
+        self.write_state(verify={"rounds": 1, "last_verdict": "FAIL", "gaps_open": 2})
+        self.complete("T1", "T2", "T3", "T4", "T5", "T6")
+        self.assertEqual(self.line(), "phase=F action=fix round=1")
+
+
+class Done(DetectPhaseCase):
+    def test_validate_state_exiting_zero_prints_done(self):
+        self.write_state()
+        self.complete("T1", "T2", "T3", "T4", "T5", "T6")
+        self.write_validation("## Validation: demo - PASS\n\nEvidence: scripts/a.py:12\n")
+        self.assertEqual(self.line(), "phase=E action=done")
+
+    def test_a_fail_report_does_not_print_done(self):
+        self.write_state(verify={"rounds": 1, "last_verdict": "FAIL", "gaps_open": 1})
+        self.complete("T1", "T2", "T3", "T4", "T5", "T6")
+        self.write_validation("## Validation: demo - FAIL\n\nEvidence: scripts/a.py:12\n")
+        self.assertEqual(self.line(), "phase=F action=fix round=1")
+
+
+class Halt(DetectPhaseCase):
+    def test_a_recorded_halt_prints_its_reason_and_detail(self):
+        self.write_state(halt={"reason": "blast_radius", "detail": "push required"})
+        line = self.line()
+        self.assertTrue(line.startswith("phase=H action=halt reason=blast_radius "), line)
+        self.assertIn('detail="push required"', line)
+
+    def test_halt_is_checked_before_any_work_is_described(self):
+        # Pending tasks exist, so without the halt this would be phase=B.
+        self.write_state(halt={"reason": "executor", "detail": "codex not installed"})
+        self.assertNotIn("phase=B", self.line())
+        self.assertIn("reason=executor", self.line())
+
+    def test_no_progress_halts_at_the_configured_limit(self):
+        self.write_state(counters={"iterations_without_commit": 3})
+        self.write_config("[limits]\nno_progress_iterations = 3\n")
+        self.assertIn("reason=no_progress", self.line())
+
+    def test_gate_stuck_halts_past_the_configured_attempts(self):
+        self.write_state(counters={"gate_attempts": {"T4": 4}})
+        self.write_config("[limits]\ngate_attempts_per_task = 3\n")
+        line = self.line()
+        self.assertIn("reason=gate_stuck", line)
+        self.assertIn("T4", line)
+
+    def test_max_iterations_halts_with_the_limit_reason(self):
+        self.write_state(iteration=200)
+        self.write_config("[limits]\nmax_iterations = 200\n")
+        self.assertIn("reason=limit", self.line())
+
+    def test_a_blocked_status_halts(self):
+        self.write_state(status="blocked")
+        self.assertIn("reason=blocker", self.line())
+
+    def test_an_omitted_limit_never_halts(self):
+        # TOML has no null: with no [limits] table every limit is unlimited,
+        # so these counters must not stop the run.
+        self.write_state(
+            iteration=9999,
+            counters={"iterations_without_commit": 99, "gate_attempts": {"T4": 42}},
+        )
+        self.assertTrue(self.line().startswith("phase=B "), self.line())
+
+
+class ReadOnly(DetectPhaseCase):
+    def test_a_run_writes_nothing(self):
+        self.write_state(current_task="T1")
+        self.complete("T1", "T2")
+        with open(self.state_path(), "rb") as fh:
+            state_before = fh.read()
+        porcelain_before = _git(self.root, "status", "--porcelain")
+        head_before = _git(self.root, "rev-parse", "HEAD")
+
+        self.assertTrue(self.line().startswith("phase=B "))
+
+        with open(self.state_path(), "rb") as fh:
+            self.assertEqual(fh.read(), state_before)
+        self.assertEqual(_git(self.root, "status", "--porcelain"), porcelain_before)
+        self.assertEqual(_git(self.root, "rev-parse", "HEAD"), head_before)
+
+    def test_repeated_runs_print_the_same_line(self):
+        self.write_state()
+        self.complete("T1")
+        self.assertEqual(self.line(), self.line())
+
+
+class ErrorPaths(DetectPhaseCase):
+    def test_malformed_loop_json_exits_one_with_the_parse_error(self):
+        with open(self.state_path(), "w", encoding="utf-8") as fh:
+            fh.write("{ not json")
+        proc = self.detect()
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(proc.stdout, "")
+        self.assertIn("malformed JSON", proc.stderr)
+
+    def test_a_schema_violation_exits_one(self):
+        self.write_state(status="sleepy")
+        proc = self.detect()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("sleepy", proc.stderr)
+
+    def test_a_missing_tasks_md_exits_one_naming_the_path(self):
+        self.write_state()
+        os.unlink(os.path.join(self.feature_dir, "tasks.md"))
+        proc = self.detect()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("tasks.md", proc.stderr)
+
+    def test_a_malformed_config_exits_one(self):
+        self.write_state()
+        self.write_config("[limits\nmax_iterations = 1\n")
+        proc = self.detect()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("loop.config.toml", proc.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()
