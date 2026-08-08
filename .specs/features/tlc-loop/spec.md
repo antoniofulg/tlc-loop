@@ -238,4 +238,4 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | LOOP-04 | P1: Independent verification with bounded fix loop | Execute | Verified |
 | LOOP-05 | P1: Per-stage provider, model, and effort | Execute | Verified |
 | LOOP-06 | P1: Unattended continuation and stop conditions | Execute | Verified |
-| LOOP-07 | P2: Handoff from tlc-spec-driven | Tasks | Not delivered (T26 awaiting go-ahead) |
+| LOOP-07 | P2: Handoff from tlc-spec-driven | Execute | Implementing (pending verification) |

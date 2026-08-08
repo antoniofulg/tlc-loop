@@ -886,10 +886,10 @@ T30
 
 ---
 
-### T26: Loop-mode handoff in tlc-spec-driven
+### T26: Loop-mode handoff in tlc-spec-driven ✅
 
 **What**: Extend the Execute delegation offer from two options to three, adding loop mode.
-**Where**: `~/.agents/skills/tlc-spec-driven/references/implement.md`
+**Where**: `~/.agents/skills/tlc-spec-driven/references/sub-agents.md`, `~/.agents/skills/tlc-spec-driven/references/implement.md`, `~/.agents/skills/tlc-spec-driven/SKILL.md` (`Where` expanded during execution: the offer text the user reads lives in `sub-agents.md`, not `implement.md`, which carries only the mandate)
 **Depends on**: None
 **Reuses**: The existing offer text in the sub-agent delegation step.
 **Requirement**: LOOP-07
@@ -901,10 +901,11 @@ T30
 
 **Done when**:
 
-- [ ] The offer presents inline, sub-agents, and loop mode, with one line on when each fits
-- [ ] Loop mode names the invocation exactly
-- [ ] Declining loop mode leaves the existing behaviour byte-for-byte unchanged
-- [ ] No other section of `implement.md` is modified
+- [x] The offer presents inline, sub-agents, and loop mode, with one line on when each fits
+- [x] Loop mode names the invocation exactly (`/tlc-loop [feature]`)
+- [x] Declining loop mode leaves the existing behaviour byte-for-byte unchanged
+- [x] No other section of `implement.md` is modified
+- [x] The offer degrades to two options when `tlc-loop` is not installed, so the sibling stays optional
 
 **Tests**: none
 **Gate**: build
