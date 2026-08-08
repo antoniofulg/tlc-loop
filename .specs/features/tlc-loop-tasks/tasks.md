@@ -210,7 +210,7 @@ T26
 
 ---
 
-### T5: Git trailer read and dedupe
+### T5: Git trailer read and dedupe ✅
 
 **What**: Helpers to read completed task IDs from commit trailers and to compose the trailer arguments for a commit.
 **Where**: `scripts/_gitio.py`
@@ -225,11 +225,11 @@ T26
 
 **Done when**:
 
-- [ ] `completed_tasks(root)` returns task IDs from trailers, deduped, preserving first-seen order
-- [ ] Commits without a `Task:` trailer contribute nothing and produce no empty entries
-- [ ] A duplicate trailer after a rebase or cherry-pick yields one entry, and the duplication is reported to the caller
-- [ ] `is_git_repo(root)` reports whether `git rev-parse --git-dir` succeeds
-- [ ] Unit tests build a real tmpdir repo and cover: no commits, commits without trailers, mixed commits, and a duplicated trailer
+- [x] `completed_tasks(root)` returns task IDs from trailers, deduped, preserving first-seen order
+- [x] Commits without a `Task:` trailer contribute nothing and produce no empty entries
+- [x] A duplicate trailer after a rebase or cherry-pick yields one entry, and the duplication is reported to the caller
+- [x] `is_git_repo(root)` reports whether `git rev-parse --git-dir` succeeds
+- [x] Unit tests build a real tmpdir repo and cover: no commits, commits without trailers, mixed commits, and a duplicated trailer
 
 **Tests**: unit
 **Gate**: quick
