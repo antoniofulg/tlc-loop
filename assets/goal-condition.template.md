@@ -63,7 +63,7 @@ codex resolves the same thing through its own goal mechanism, which reads
 so the equivalent is the objective handed to bootstrap:
 
 ```bash
-python3 scripts/init_loop.py <FEATURE> \
+python3 <skill-dir>/scripts/init_loop.py <FEATURE> --root <root> \
   --objective "Run the tlc-loop-tasks loop for feature <FEATURE> until the transcript contains the literal line __TLC_LOOP__ feature=<FEATURE> verify=PASS, or a phase=H action=halt line for that feature."
 ```
 
@@ -81,7 +81,7 @@ Use the shell driver. It reads `detect_phase.py` directly rather than the
 transcript, so it needs no condition at all:
 
 ```bash
-bash scripts/loop.sh <FEATURE> --root .
+bash <skill-dir>/scripts/loop.sh <FEATURE> --root <root>
 ```
 
 It breaks on the same two events: `phase=E` (exit 0) and `phase=H` (exit 1).

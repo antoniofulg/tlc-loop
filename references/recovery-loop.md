@@ -108,8 +108,8 @@ change, or any other remote or externally visible operation, the loop **halts
 and waits**:
 
 ```bash
-python3 scripts/update_loop.py <feature> --halt blast_radius \
-  --detail "<the exact operation that needs authorization>"
+python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> \
+  --halt blast_radius --detail "<the exact operation that needs authorization>"
 ```
 
 **Halting is not asking.** An unattended run has nobody to answer a prompt, so
@@ -157,7 +157,7 @@ None of these is a blocker, however long it has been going on:
 ### Recording a proven blocker
 
 ```bash
-python3 scripts/update_loop.py <feature> \
+python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> \
   --halt blocker \
   --detail "<the missing input, and the alternatives already exhausted>" \
   --status blocked
