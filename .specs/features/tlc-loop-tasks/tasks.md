@@ -236,7 +236,7 @@ T26
 
 ---
 
-### T6: Parse tasks.md
+### T6: Parse tasks.md ✅
 
 **What**: Extract task IDs, their phase, and their `Depends on` / `Tests` / `Gate` fields from a `tasks.md`.
 **Where**: `scripts/_tasksmd.py`
@@ -251,11 +251,11 @@ T26
 
 **Done when**:
 
-- [ ] `parse(path)` returns tasks in document order, each carrying id, phase number, depends-on list, tests, and gate
-- [ ] Phase membership is derived from the `### Phase N` headings
-- [ ] A `tasks.md` with no tasks returns an empty list rather than raising
-- [ ] Field parsing tolerates the bold-marker variations `validate_tasks.py` already accepts
-- [ ] Unit tests cover: a multi-phase file, an empty file, and a task missing an optional field
+- [x] `parse(path)` returns tasks in document order, each carrying id, phase number, depends-on list, tests, and gate
+- [x] Phase membership is derived from the `### Phase N` headings
+- [x] A `tasks.md` with no tasks returns an empty list rather than raising
+- [x] Field parsing tolerates the bold-marker variations `validate_tasks.py` already accepts
+- [x] Unit tests cover: a multi-phase file, an empty file, and a task missing an optional field
 
 **Tests**: unit
 **Gate**: quick
