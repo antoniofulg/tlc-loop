@@ -683,7 +683,7 @@ T28
 
 ---
 
-### T21: SKILL.md
+### T21: SKILL.md ✅
 
 **What**: The skill entrypoint: invocation, phase branches, critical rules.
 **Where**: `SKILL.md`
@@ -698,11 +698,27 @@ T28
 
 **Done when**:
 
-- [ ] Frontmatter carries a name and a description that triggers on loop-execution phrasing and excludes single-task work
-- [ ] One branch per phase, each stating its done-when condition
-- [ ] The continue gate is stated: re-enter detection in the same turn unless the phase is terminal or a halt condition holds
-- [ ] The blast-radius rule is stated as halt-and-wait, not ask-and-proceed
-- [ ] Every referenced script and reference file exists at the stated path
+- [x] Frontmatter carries a name and a description that triggers on loop-execution phrasing and excludes single-task work
+- [x] One branch per phase, each stating its done-when condition
+- [x] The continue gate is stated: re-enter detection in the same turn unless the phase is terminal or a halt condition holds
+- [x] The blast-radius rule is stated as halt-and-wait, not ask-and-proceed
+- [~] Every referenced script and reference file exists at the stated path - **6 of 6 scripts and 9 of 11 docs verified; 2 forward references pending T22/T23**
+
+> Checked mechanically rather than by reading: all 12 documented command
+> invocations were parsed out of `SKILL.md` and every flag matched against the
+> script's own `--help`; every enum value (`--halt`, `--verify-round`,
+> `--status`, `--gate`) was matched against the constant the code exports. No
+> unimplemented halt reason is named - `state_corrupt` is deliberately absent
+> until T28 lands it.
+>
+> `checklist.md` and `iteration-summary.template.md` are the two misses: they
+> are forward references to T22 and T23 in this same phase. The path check is
+> re-run as the closing step of T23.
+>
+> Scripts are documented as `python3 <skill-dir>/scripts/...`, never as a bare
+> `scripts/...`: the skill is installed beside the consuming project, so a
+> relative path would look for a project-local `scripts/` tree that is not this
+> skill.
 
 **Tests**: none
 **Gate**: build
