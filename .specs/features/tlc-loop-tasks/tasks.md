@@ -371,7 +371,7 @@ T28
 
 ---
 
-### T11: Atomic checkpoint commit
+### T11: Atomic checkpoint commit ✅
 
 **What**: Create the per-task commit carrying `Task:` and `Gate:` trailers, refusing when the gate did not pass.
 **Where**: `scripts/checkpoint.py`
@@ -386,12 +386,17 @@ T28
 
 **Done when**:
 
-- [ ] A commit is created only when the caller asserts a passing gate; anything else exits non-zero without committing
-- [ ] The message is validated with `check_commit.py` before staging, and a non-zero exit aborts
-- [ ] The commit carries `Task: <id>` and `Gate: <level> PASS` trailers, readable back with `%(trailers:key=Task,valueonly)`
-- [ ] A task with no file changes prints `SKIP: no changes` and exits 0 without an empty commit
-- [ ] `--no-verify` appears nowhere in the implementation
-- [ ] Unit tests build a tmpdir repo and cover: successful commit with trailers read back, refusal without a passing gate, refusal on an invalid message, and the no-changes path
+- [x] A commit is created only when the caller asserts a passing gate; anything else exits non-zero without committing
+- [x] The message is validated with `check_commit.py` before staging, and a non-zero exit aborts
+- [x] The commit carries `Task: <id>` and `Gate: <level> PASS` trailers, readable back with `%(trailers:key=Task,valueonly)`
+- [x] A task with no file changes prints `SKIP: no changes` and exits 0 without an empty commit
+- [x] `--no-verify` appears nowhere in the implementation
+- [x] Unit tests build a tmpdir repo and cover: successful commit with trailers read back, refusal without a passing gate, refusal on an invalid message, and the no-changes path
+
+> A trailer the message already carries is kept rather than repeated, and one
+> contradicting the flags is refused. Appending unconditionally put two `Task:`
+> trailers on every commit, which `_gitio.completed_tasks` reads as the rebase
+> ambiguity from spec.md's edge cases.
 
 **Tests**: unit
 **Gate**: quick
