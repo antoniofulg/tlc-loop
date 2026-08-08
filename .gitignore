@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+
+# Loop run state: machine-owned, and reconstructible from git plus tasks.md.
+# checkpoint.py stages with `git add -A` when the caller names no paths, so
+# without this every task commit would carry a counter bump nobody reads.
+.specs/features/**/loop.json

@@ -978,7 +978,7 @@ T30
 
 ---
 
-### T30: Keep loop state out of task commits
+### T30: Keep loop state out of task commits ✅
 
 **What**: Stop `checkpoint.py`'s path-less branch from sweeping the machine-owned state file into a task's atomic commit.
 **Where**: `.gitignore`
@@ -993,10 +993,21 @@ T30
 
 **Done when**:
 
-- [ ] `loop.json` is ignored wherever it appears under `.specs/features/`
-- [ ] A `checkpoint.py` run with no explicit paths leaves `loop.json` out of the resulting commit, proven by inspecting the commit's file list in a tmpdir repo
-- [ ] No already-tracked file becomes ignored by the change
-- [ ] The reason is recorded in `references/state-schema.md`: the file is a cache reconstructible from git, so committing it is churn
+- [x] `loop.json` is ignored wherever it appears under `.specs/features/`
+- [x] A `checkpoint.py` run with no explicit paths leaves `loop.json` out of the resulting commit, proven by inspecting the commit's file list in a tmpdir repo
+- [x] No already-tracked file becomes ignored by the change
+- [x] The reason is recorded in `references/state-schema.md`: the file is a cache reconstructible from git, so committing it is churn
+
+> The fixture installs the shipped `.gitignore` verbatim instead of a
+> hand-written pattern, so dropping the rule from the real file fails the test
+> rather than passing against a copy of itself. Discrimination was checked by
+> running the same staging without the rule: `loop.json` does land in the
+> commit, so the assertion is not vacuous.
+>
+> `.specs/features/**/loop.json` rather than `*/`: git's `/**/` matches zero or
+> more directories, so a feature directly under `features/` matches too.
+> `git ls-files -i -c --exclude-standard` is empty, so nothing already tracked
+> became ignored.
 
 **Tests**: unit
 **Gate**: quick

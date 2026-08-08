@@ -310,6 +310,81 @@ class SelectiveStaging(CheckpointCase):
         self.assertIn(".specs/features/demo/tasks.md", files)
 
 
+class LoopStateStaysOutOfCommits(CheckpointCase):
+    """T30 / LOOP-02 AC 1: a task commit carries the task's work, not the cache.
+
+    With no `--path`, `checkpoint.py` stages everything. `loop.json` is
+    machine-owned state that git can already reconstruct, so sweeping it into a
+    task's atomic commit adds a counter bump to a diff that is supposed to be
+    one task's implementation and tests.
+
+    The fixture installs the shipped `.gitignore` verbatim rather than a
+    hand-written pattern, so dropping the rule from the real file fails here.
+    """
+
+    GITIGNORE = os.path.join(os.path.dirname(SCRIPTS), ".gitignore")
+
+    def setUp(self):
+        super().setUp()
+        shutil.copyfile(self.GITIGNORE, os.path.join(self.root, ".gitignore"))
+        self.write(".specs/features/demo/loop.json", '{"feature": "demo"}\n')
+
+    def committed_files(self):
+        return _git(
+            self.root, "show", "--name-only", "--format=", "HEAD"
+        ).stdout.split()
+
+    def test_a_path_less_checkpoint_leaves_loop_json_out_of_the_commit(self):
+        self.write("work.txt", "task work")
+        self.checkpoint()
+        self.assertNotIn(".specs/features/demo/loop.json", self.committed_files())
+
+    def test_the_task_work_is_still_committed(self):
+        self.write("work.txt", "task work")
+        self.checkpoint()
+        self.assertIn("work.txt", self.committed_files())
+
+    def test_the_state_file_survives_on_disk(self):
+        # Ignored, not deleted: the run still needs its counters.
+        self.write("work.txt", "task work")
+        self.checkpoint()
+        self.assertTrue(
+            os.path.isfile(os.path.join(self.root, ".specs/features/demo/loop.json"))
+        )
+
+    def test_it_is_ignored_under_any_feature_directory(self):
+        self.write(".specs/features/other-feature/loop.json", "{}\n")
+        ignored = _git(
+            self.root,
+            "check-ignore",
+            ".specs/features/demo/loop.json",
+            ".specs/features/other-feature/loop.json",
+        ).stdout.split()
+        self.assertEqual(
+            ignored,
+            [".specs/features/demo/loop.json", ".specs/features/other-feature/loop.json"],
+        )
+
+
+class NoTrackedFileBecomesIgnored(unittest.TestCase):
+    """T30: the new rule must not shadow a file this repo already tracks."""
+
+    def test_no_tracked_file_matches_an_ignore_rule(self):
+        repo = os.path.dirname(SCRIPTS)
+        proc = subprocess.run(
+            ["git", "-C", repo, "rev-parse", "--git-dir"], capture_output=True, text=True
+        )
+        if proc.returncode != 0:
+            self.skipTest(f"{repo} is not a git repository")
+        listed = subprocess.run(
+            ["git", "-C", repo, "ls-files", "-i", "-c", "--exclude-standard"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(listed.returncode, 0, listed.stderr)
+        self.assertEqual(listed.stdout.strip(), "")
+
+
 class NeverBypassesHooks(unittest.TestCase):
     """The implementation must not carry git's hook-bypass flag at all."""
 

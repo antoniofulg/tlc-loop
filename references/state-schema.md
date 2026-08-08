@@ -11,6 +11,16 @@ than a truncated one.
 **The file is machine-owned.** Do not hand-edit it. It is also disposable:
 deleting it costs the counters and the objective, never task progress.
 
+**It is not committed.** Add `.specs/features/**/loop.json` to the project's
+`.gitignore`. The file is a cache: everything durable in it is either
+reconstructible from git and `tasks.md`, or a counter that only matters to the
+run that is writing it. Committing it is churn on two counts. Every task commit
+would carry an unrelated counter bump, which is the opposite of the atomic
+one-task diff the checkpoint exists to produce, and the noise lands in exactly
+the history a reviewer bisects. `checkpoint.py` stages with `git add -A`
+whenever the caller names no paths, so the ignore rule is what keeps the two
+apart.
+
 ---
 
 ## Four invariants
