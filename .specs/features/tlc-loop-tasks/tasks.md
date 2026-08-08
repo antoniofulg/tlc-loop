@@ -901,7 +901,7 @@ T30
 
 ---
 
-### T27: End-to-end loop over a toy feature
+### T27: End-to-end loop over a toy feature ✅
 
 **What**: Drive the whole loop across a fixture feature in a tmpdir git repo: bootstrap, two batches, checkpoint, resume after deleting state, terminal.
 **Where**: `scripts/test_int_end_to_end.py`
@@ -916,11 +916,30 @@ T30
 
 **Done when**:
 
-- [ ] A fixture repo with a valid `tasks.md` bootstraps, then `detect_phase` names the first batch
-- [ ] Simulated task commits with trailers advance the detected phase without any state write
-- [ ] Deleting `loop.json` mid-run still yields the same next task on the following detect
-- [ ] A halt condition produces `phase=H` with the expected reason and the loop stops
-- [ ] Executors are stubbed - the test spawns no real provider CLI and makes no network call
+- [x] A fixture repo with a valid `tasks.md` bootstraps, then `detect_phase` names the first batch
+- [x] Simulated task commits with trailers advance the detected phase without any state write
+- [x] Deleting `loop.json` mid-run still yields the same next task on the following detect
+- [x] A halt condition produces `phase=H` with the expected reason and the loop stops
+- [x] Executors are stubbed - the test spawns no real provider CLI and makes no network call
+
+> The sibling validators are the real ones, not stubs: `validate_tasks.py`
+> gates the bootstrap, `check_commit.py` gates every checkpoint message, and
+> `validate_state.py` decides `phase=E`. Stubbing them would leave the
+> integration untested at the three seams most likely to break. The module
+> skips when the sibling is absent, listing the paths tried.
+>
+> The resolver is the only stub, and it records every call, so
+> `assert_no_executor_ran` proves the driver stopped rather than respawning.
+> That assertion was checked for discrimination: driving the same fixture at
+> `phase=B` does write the marker, so its absence on `E` and `H` means
+> something.
+>
+> Both terminals run through the real `loop.sh`: exit 1 on the halt, exit 0 on
+> done, each with the line it broke on as the last line of stdout.
+>
+> The commit-contents assertion caught a defect in the fixture itself while
+> being written - the helper committed `src/t1.py` while the plan declared
+> `src/one.py`. The helper now writes the file the task's `Where` field names.
 
 **Tests**: integration
 **Gate**: full
