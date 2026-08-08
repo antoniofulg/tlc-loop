@@ -3,6 +3,8 @@
 TOML via stdlib `tomllib`, so there is no dependency and no hand-written
 parser. TOML has no `null`, so an omitted key under `[limits]` means
 *unlimited* (D8); unlimited is represented as `None` in the returned config.
+`verify.max_rounds` follows the same rule: the verify ceiling is configurable
+with no hard-coded maximum (D5), so omitting it imposes none.
 
 Every absent key resolves to its documented default, which is why an absent
 file is a valid configuration rather than an error. An `effort` the loop knows
@@ -49,7 +51,9 @@ def defaults():
             "fix": dict(_STAGE_DEFAULT),
         },
         "execute": {"batch_size": 7},
-        "verify": {"max_rounds": 3},
+        # No hard-coded maximum (D5): the ceiling exists only when the user
+        # sets one, exactly like a `[limits]` key.
+        "verify": {"max_rounds": None},
         "continue": {"in_turn": True, "mode": "auto", "respawn": dict(_STAGE_DEFAULT)},
         "limits": {key: None for key in LIMIT_KEYS},
         "providers": {},

@@ -184,9 +184,20 @@ def main(argv=None):
         print("phase=E action=done")
         return 0
 
-    # 7. Not done: fix the gaps a FAIL round left open, else verify again.
+    # 7. Not done, so another round is due - unless the configured budget for
+    #    them is spent. Checked here, ahead of both round-dispatching phases:
+    #    the ceiling exists to stop rounds, so it has to be answered before one
+    #    is named (LOOP-04 AC 4). A PASS never reaches this point; step 6
+    #    already closed the feature.
     verify = state.get("verify") or {}
     rounds = int(verify.get("rounds") or 0)
+    ceiling = config["verify"].get("max_rounds")
+    if ceiling is not None and rounds >= ceiling:
+        detail = f"{rounds} verify round(s) without a PASS, max_rounds {ceiling}"
+        print(f"phase=H action=halt reason=verify_exhausted detail={_quote(detail)}")
+        return 0
+
+    # 8. Fix the gaps a FAIL round left open, else verify again.
     if verify.get("last_verdict") == "FAIL" and int(verify.get("gaps_open") or 0) > 0:
         print(f"phase=F action=fix round={rounds}")
         return 0

@@ -932,7 +932,7 @@ T30
 
 ---
 
-### T29: Enforce the configured verify-round ceiling
+### T29: Enforce the configured verify-round ceiling ✅
 
 **What**: Make the verify-round limit an actual halt condition instead of a config key nobody reads.
 **Where**: `scripts/detect_phase.py`
@@ -947,11 +947,31 @@ T30
 
 **Done when**:
 
-- [ ] `verify.rounds` reaching `verify.max_rounds` without a PASS report prints `phase=H action=halt reason=verify_exhausted`
-- [ ] The halt is checked before any verify or fix phase is emitted, so an exhausted loop never dispatches another round
-- [ ] An omitted `max_rounds` means unlimited, consistent with the TOML-has-no-null rule
-- [ ] `references/phase-transitions.md` and `references/checklist.md` document `verify_exhausted`
-- [ ] Unit tests cover: below the limit dispatches, at the limit halts, unlimited never halts
+- [x] `verify.rounds` reaching `verify.max_rounds` without a PASS report prints `phase=H action=halt reason=verify_exhausted`
+- [x] The halt is checked before any verify or fix phase is emitted, so an exhausted loop never dispatches another round
+- [x] An omitted `max_rounds` means unlimited, consistent with the TOML-has-no-null rule
+- [x] `references/phase-transitions.md` and `references/checklist.md` document `verify_exhausted`
+- [x] Unit tests cover: below the limit dispatches, at the limit halts, unlimited never halts
+
+> **Deviation, beyond `detect_phase.py`.** "Omitted means unlimited" was
+> unreachable: T3 gave `verify.max_rounds` a hard default of `3`, so the key
+> was never absent from the parsed config. The default is now `None`, which is
+> what the spec's own assumption row asks for - *configurable, no hard-coded
+> maximum* (D5) - and what LOOP-04 AC 4 means by "the **configured** limit".
+> `_config.py` changed with it, and so did the five places that documented the
+> old default: `config-schema.md`, `state-schema.md`, `checklist.md`,
+> `loop.config.example.toml`, and `SKILL.md`.
+>
+> `SKILL.md` had to change for a second reason: it told the agent to record
+> `--halt limit` by hand when the rounds ran out. The detector owns that now,
+> and the prose would have produced the wrong reason slug.
+>
+> The two config tests asserting the `3` default were updated, not weakened:
+> they assert the new default with the same precision.
+>
+> The check sits after the validator, not in `halt_reason()`. A PASS on the
+> last available round is done rather than halted, and pending work still
+> dispatches: the ceiling stops rounds, not batches.
 
 **Tests**: unit
 **Gate**: quick

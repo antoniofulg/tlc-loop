@@ -8,6 +8,8 @@ Derived from T8's "Done when" criteria and:
   - LOOP-01 AC 3: an absent loop.json reconstructs from git and tasks.md
   - LOOP-01 AC 4: an unparseable loop.json halts with
     `phase=H reason=state_corrupt` rather than reconstructing (T28)
+  - LOOP-04 AC 4: the configured verify-round limit reached without a PASS
+    halts and escalates (T29)
   - LOOP-06 AC 6/7/8: halt on no progress, on a stuck gate, and on a
     configured iteration or minute limit
 
@@ -288,6 +290,68 @@ class Fix(DetectPhaseCase):
         self.write_state(verify={"rounds": 1, "last_verdict": "FAIL", "gaps_open": 2})
         self.complete("T1", "T2", "T3", "T4", "T5", "T6")
         self.assertEqual(self.line(), "phase=F action=fix round=1")
+
+
+class VerifyCeiling(DetectPhaseCase):
+    """T29 / LOOP-04 AC 4: the configured verify-round limit is a real halt.
+
+    The ceiling is checked before a verify or a fix round is emitted, so an
+    exhausted loop never dispatches another one. An omitted `max_rounds` is
+    unlimited, the same TOML-has-no-null rule the `[limits]` keys follow.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.complete("T1", "T2", "T3", "T4", "T5", "T6")
+
+    def test_below_the_limit_still_dispatches_a_verify_round(self):
+        self.write_state(verify={"rounds": 2, "last_verdict": "FAIL", "gaps_open": 0})
+        self.write_config("[verify]\nmax_rounds = 3\n")
+        self.assertEqual(self.line(), "phase=V action=verify round=3")
+
+    def test_reaching_the_limit_halts_with_verify_exhausted(self):
+        self.write_state(verify={"rounds": 3, "last_verdict": "FAIL", "gaps_open": 0})
+        self.write_config("[verify]\nmax_rounds = 3\n")
+        line = self.line()
+        self.assertTrue(
+            line.startswith("phase=H action=halt reason=verify_exhausted "), line
+        )
+
+    def test_the_halt_detail_names_the_rounds_and_the_limit(self):
+        self.write_state(verify={"rounds": 3, "last_verdict": "FAIL", "gaps_open": 0})
+        self.write_config("[verify]\nmax_rounds = 3\n")
+        line = self.line()
+        self.assertIn("3", line)
+        self.assertIn("max_rounds", line)
+
+    def test_the_ceiling_is_checked_before_a_fix_round_is_emitted(self):
+        # Open gaps would otherwise select phase=F, which would spend another
+        # round on a loop that has already used its budget.
+        self.write_state(verify={"rounds": 3, "last_verdict": "FAIL", "gaps_open": 2})
+        self.write_config("[verify]\nmax_rounds = 3\n")
+        line = self.line()
+        self.assertNotIn("phase=F", line)
+        self.assertIn("reason=verify_exhausted", line)
+
+    def test_an_omitted_max_rounds_never_halts(self):
+        self.write_state(verify={"rounds": 99, "last_verdict": "FAIL", "gaps_open": 0})
+        self.assertEqual(self.line(), "phase=V action=verify round=100")
+
+    def test_a_pass_report_closes_the_feature_even_at_the_ceiling(self):
+        # "Reached without a PASS" is the condition. A PASS is not a halt.
+        self.write_state(verify={"rounds": 3, "last_verdict": "PASS", "gaps_open": 0})
+        self.write_config("[verify]\nmax_rounds = 3\n")
+        self.write_validation("## Validation: demo - PASS\n\nEvidence: scripts/a.py:12\n")
+        self.assertEqual(self.line(), "phase=E action=done")
+
+    def test_pending_work_is_still_dispatched_at_the_ceiling(self):
+        # The ceiling gates verify and fix rounds, not the batch that has not
+        # run yet. T7 is planned and uncommitted, so there is work to do.
+        with open(os.path.join(self.feature_dir, "tasks.md"), "a", encoding="utf-8") as fh:
+            fh.write("\n### T7: Seven\n**Tests**: unit\n**Gate**: quick\n")
+        self.write_state(verify={"rounds": 3, "last_verdict": "FAIL", "gaps_open": 2})
+        self.write_config("[verify]\nmax_rounds = 3\n")
+        self.assertEqual(self.line(), "phase=B action=execute_batch batch=P2 tasks=T7")
 
 
 class Done(DetectPhaseCase):

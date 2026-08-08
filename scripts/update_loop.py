@@ -48,6 +48,7 @@ HALT_REASONS = (
     "blocker",
     "blast_radius",
     "state_corrupt",
+    "verify_exhausted",
 )
 
 VERDICTS = ("PASS", "FAIL")

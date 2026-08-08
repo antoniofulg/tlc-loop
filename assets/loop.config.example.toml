@@ -54,7 +54,8 @@ effort = "max"
 batch_size = 7 # default: 7. Whole phases are packed up to this many tasks.
 
 [verify]
-max_rounds = 3 # default: 3. Not a [limits] key: omitting it gives 3, not unlimited.
+max_rounds = 3 # omitted -> unlimited. Spending it without a PASS halts with
+               # reason=verify_exhausted instead of starting another round.
 
 
 # --- Continuation -----------------------------------------------------------

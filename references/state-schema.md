@@ -126,8 +126,13 @@ the real set of completed tasks. Entries are added once and never removed.
 
 `detect_phase.py` reads `last_verdict` and `gaps_open` together: a `FAIL`
 verdict with `gaps_open > 0` selects `phase=F` (fix), anything else selects
-`phase=V` (verify). `rounds` is compared against `verify.max_rounds` from the
-config to decide when to escalate.
+`phase=V` (verify).
+
+Before either, it compares `rounds` against `verify.max_rounds` from the
+config. Reaching the ceiling without a PASS prints
+`phase=H action=halt reason=verify_exhausted`, so the escalation is enforced by
+the detector rather than remembered by the loop. An omitted `max_rounds` is
+unlimited and never halts.
 
 ---
 

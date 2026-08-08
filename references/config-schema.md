@@ -33,8 +33,10 @@ value. The convention is the absence of the key:
 **Under `[limits]`, an omitted key means unlimited.** A limit is enforced only
 when you write it down. In the parsed config an unlimited limit is `None`.
 
-This applies to `[limits]` and nowhere else. Every other table has a real
-default value, listed below.
+`verify.max_rounds` is the one key outside `[limits]` that works the same way,
+because it is the same kind of thing: a ceiling the user chooses, with no
+hard-coded maximum behind it. Every other table has a real default value,
+listed below.
 
 ---
 
@@ -108,10 +110,16 @@ batch_size = 7
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `max_rounds` | integer | `3` | How many verify rounds may run before the loop halts and escalates. |
+| `max_rounds` | integer | unlimited | How many verify rounds may run before the loop halts and escalates. |
 
-`max_rounds` is not a `[limits]` key, so omitting it gives you the default of
-`3` rather than unlimited.
+`max_rounds` is not under `[limits]`, but it follows the same rule: omit it and
+there is no ceiling. The verify budget is a user decision with no hard-coded
+maximum, so the skill does not invent one.
+
+Reaching the ceiling without a PASS makes `detect_phase.py` print
+`phase=H action=halt reason=verify_exhausted` in place of the next `phase=V` or
+`phase=F`. Set it if an unattended run should stop rather than keep paying for
+verify rounds that are not converging.
 
 ```toml
 [verify]

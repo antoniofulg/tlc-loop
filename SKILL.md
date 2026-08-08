@@ -237,12 +237,11 @@ Done when: every task in the batch carries a `Task:` trailer or sits in
    ```
 5. On FAIL, distil the grounded failures into lessons with the sibling's
    `lessons.py`. A clean PASS records nothing.
-6. `verify.max_rounds` is enforced here, by this loop, not by the detector.
-   When the rounds are spent without a PASS, record the halt and stop:
-   ```bash
-   python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> \
-     --halt limit --detail "verify rounds exhausted without PASS"
-   ```
+6. `verify.max_rounds` is enforced by the detector, not by you. Once the rounds
+   are spent without a PASS, the next detect prints
+   `phase=H action=halt reason=verify_exhausted` in place of another round.
+   Record the verdict as above and re-enter detection; do not start a round the
+   detect line did not name.
 
 Done when: a verdict is recorded. PASS moves toward `E`; FAIL with open gaps
 moves to `F`.

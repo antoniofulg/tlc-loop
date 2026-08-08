@@ -60,7 +60,7 @@ Every line the implementation can print, with the condition that produces it.
   `verify.rounds`. A fix belongs to the round that found the gaps, so `V round=2`
   following `F round=1` reads as one cycle rather than two.
 - `reason=<slug>` is one of `no_progress`, `gate_stuck`, `executor`, `limit`,
-  `blocker`, `blast_radius`, `state_corrupt`.
+  `blocker`, `blast_radius`, `state_corrupt`, `verify_exhausted`.
 - `detail="<text>"` is always present on a halt line, always double quoted,
   always a single line. Internal double quotes become single quotes and runs of
   whitespace collapse, so the line stays parseable by a shell driver.
@@ -85,7 +85,10 @@ contract, not an implementation detail.
    tasks into batches of whole phases up to `execute.batch_size` and naming the
    first one.
 7. **Ask the validator.** `validate_state.py` exiting 0 → `phase=E`.
-8. **Otherwise** → `phase=F` when the last verdict was `FAIL` with
+8. **Check the verify budget.** `verify.rounds` having reached
+   `verify.max_rounds` → `phase=H reason=verify_exhausted`. An absent
+   `max_rounds` is unlimited and never fires.
+9. **Otherwise** → `phase=F` when the last verdict was `FAIL` with
    `gaps_open > 0`, else `phase=V`.
 
 ### Git wins over state
@@ -150,6 +153,24 @@ Within the halt check the order is fixed, so the answer is reproducible:
 **A limit absent from the config is unlimited and never fires.** TOML has no
 `null`, so omission is the only way to express "no limit", and a detector whose
 limit is unset is skipped entirely rather than defaulted to some number.
+
+### The verify budget is checked late, not with the others
+
+`verify_exhausted` is the one halt that is not part of the block above. It sits
+at step 8, after the validator has been asked, for two reasons.
+
+A PASS must win. The condition is "the rounds are spent **without a PASS**", so
+a feature that verified successfully on its last available round is done, not
+halted. Asking the validator first is what makes that true.
+
+Pending work must win too. The ceiling exists to stop verify and fix rounds
+from repeating forever; it says nothing about a batch that has not run yet. A
+`tasks.md` that grows a task after a failed verify round still gets that task
+executed, and only then runs into the ceiling.
+
+What it must come before is the round it would authorise. Both `phase=V` and
+`phase=F` spend from the same budget, so the check sits ahead of both: an
+exhausted loop never dispatches one more round of either.
 
 ---
 

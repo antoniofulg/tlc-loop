@@ -94,9 +94,13 @@ happened, it is the wrong box: find the file or the exit code that proves it.
 - [ ] `verify.gaps_open` matches the number of ranked gaps in the report.
 - [ ] On FAIL, the grounded failures were distilled into lessons through the
       sibling skill's `lessons.py`. A clean PASS records nothing.
-- [ ] If `verify.max_rounds` is spent without a PASS, a halt was recorded
-      rather than another round started.
-      *Evidence: `halt.reason` is `limit` in `loop.json`.*
+- [ ] If `verify.max_rounds` is spent without a PASS, no further round was
+      started. The detector enforces this: it prints
+      `phase=H action=halt reason=verify_exhausted` instead of `phase=V` or
+      `phase=F`, so nothing has to be recorded by hand.
+      *Evidence: the detect line, against `verify.rounds` in `loop.json` and
+      `verify.max_rounds` in `loop.config.toml`. An omitted `max_rounds` is
+      unlimited, so no halt is due.*
 
 ## Phase F - fix
 

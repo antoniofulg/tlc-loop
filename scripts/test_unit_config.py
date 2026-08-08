@@ -31,7 +31,7 @@ class AbsentFile(unittest.TestCase):
             cfg = _config.load_config(root)
             self.assertEqual(cfg["version"], 1)
             self.assertEqual(cfg["execute"]["batch_size"], 7)
-            self.assertEqual(cfg["verify"]["max_rounds"], 3)
+            self.assertIsNone(cfg["verify"]["max_rounds"])
             self.assertIs(cfg["continue"]["in_turn"], True)
             self.assertEqual(cfg["continue"]["mode"], "auto")
             self.assertEqual(
@@ -82,6 +82,17 @@ class UnlimitedByOmission(unittest.TestCase):
             self.assertIsNone(limits["executor_timeout_seconds"])
             self.assertIsNone(limits["max_minutes"])
 
+    def test_an_omitted_max_rounds_is_unlimited_rather_than_a_hard_ceiling(self):
+        # T29 / D5: the verify ceiling is configurable with no hard-coded
+        # maximum, so an absent key imposes none.
+        with tempfile.TemporaryDirectory() as root:
+            self.assertIsNone(_config.load_config(root)["verify"]["max_rounds"])
+
+    def test_a_configured_max_rounds_is_read_verbatim(self):
+        with tempfile.TemporaryDirectory() as root:
+            _write(root, "[verify]\nmax_rounds = 2\n")
+            self.assertEqual(_config.load_config(root)["verify"]["max_rounds"], 2)
+
 
 class PartialFile(unittest.TestCase):
     def test_configured_keys_win_and_absent_keys_keep_defaults(self):
@@ -107,7 +118,7 @@ class PartialFile(unittest.TestCase):
                 cfg["stages"]["verify"],
                 {"provider": "auto", "model": None, "effort": None},
             )
-            self.assertEqual(cfg["verify"]["max_rounds"], 3)
+            self.assertIsNone(cfg["verify"]["max_rounds"])
 
     def test_a_partially_specified_stage_keeps_the_other_stage_defaults(self):
         with tempfile.TemporaryDirectory() as root:
