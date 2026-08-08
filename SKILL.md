@@ -296,7 +296,14 @@ the last line of output.
 #### Phase H - Halt
 
 The line carries `reason` and `detail`. Implemented reasons: `no_progress`,
-`gate_stuck`, `executor`, `limit`, `blocker`, `blast_radius`.
+`gate_stuck`, `executor`, `limit`, `blocker`, `blast_radius`, `state_corrupt`,
+`verify_exhausted`.
+
+The last two are derived by `detect_phase.py` on the spot rather than read back
+out of `loop.json`: a state file that cannot be parsed cannot record why, and
+the verify ceiling is a comparison against the config, not a stored flag. This
+list is kept in step with `update_loop.HALT_REASONS` by a test, not by memory -
+it drifted once already.
 
 1. Print the iteration summary with the halt reason filled in.
 2. **Do not print the done-signature.** It means verified; a halted run is not.

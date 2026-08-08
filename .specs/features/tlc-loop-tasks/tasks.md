@@ -1126,10 +1126,10 @@ T30
 
 ---
 
-### T33: Gate the halt-reason enumeration against the code
+### T33: Gate the halt-reason enumeration against the code ✅
 
 **What**: Replace the one-time manual enum check with a test, so `SKILL.md`'s halt list cannot drift from `update_loop.HALT_REASONS` again.
-**Where**: `scripts/test_unit_docs_parity.py`
+**Where**: `scripts/test_unit_docs_parity.py`, `SKILL.md`
 **Depends on**: None
 **Reuses**: `update_loop.HALT_REASONS` as the single source of truth.
 **Requirement**: LOOP-06
@@ -1141,10 +1141,12 @@ T30
 
 **Done when**:
 
-- [ ] A test fails when `SKILL.md`'s documented halt reasons differ in either direction from `update_loop.HALT_REASONS`
-- [ ] The test currently fails against the stale list, then passes once `SKILL.md` is corrected to include `state_corrupt` and `verify_exhausted`
-- [ ] The failure message names the missing or extra reason, not just that the sets differ
-- [ ] The same parity idea covers `references/phase-transitions.md` if it enumerates reasons too
+- [x] A test fails when `SKILL.md`'s documented halt reasons differ in either direction from `update_loop.HALT_REASONS`
+- [x] The test currently fails against the stale list, then passes once `SKILL.md` is corrected to include `state_corrupt` and `verify_exhausted`
+- [x] The failure message names the missing or extra reason, not just that the sets differ
+- [x] The same parity idea covers `references/phase-transitions.md` if it enumerates reasons too
+
+**Red then green**: against the stale list the new test failed with `SKILL.md does not document halt reason(s) the code implements: state_corrupt, verify_exhausted`; correcting `SKILL.md` turned it green. `references/phase-transitions.md` was already in parity and passed from the first run.
 
 **Tests**: unit
 **Gate**: quick
