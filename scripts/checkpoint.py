@@ -15,10 +15,12 @@ Three refusals, in order, before anything is written:
 2. **The message is validated first.** `check_commit.py` from the sibling skill
    runs *before* the index is touched, so a rejected message cannot leave a
    half-staged tree behind (LOOP-02 AC 3).
-3. **No diff is not an empty commit.** A task that legitimately changed nothing
-   prints `SKIP: no changes` and exits 0. The caller records that completion in
-   `loop.json` instead, because there is no trailer to read back (LOOP-02
-   AC 6).
+3. **A task that changed nothing still gets a commit.** `--allow-empty`, same
+   `Task:` and `Gate:` trailers, and the line reports it as `empty`. LOOP-02
+   AC 6 forbids fabricating a source diff, and an empty commit has none: it
+   carries the trailers and nothing else. Recording the completion only in
+   `loop.json` would put it in the one place git cannot rebuild, so deleting
+   that file would re-dispatch a finished task.
 
 Git hooks always run: this script never passes git a flag that would bypass
 them, which is what keeps a project's own commit-msg or pre-commit guard in
@@ -29,9 +31,9 @@ Usage:
                   --gate-result PASS --message "<conventional commit>" \\
                   [--path FILE ...] [--root DIR]
 
-Exit codes: 0 committed, or legitimately nothing to commit. 1 the environment
-is unusable (no repository, sibling skill missing, git failed). 2 the caller's
-request was refused (no asserted pass, invalid message).
+Exit codes: 0 committed. 1 the environment is unusable (no repository, sibling
+skill missing, git failed). 2 the caller's request was refused (no asserted
+pass, invalid message).
 """
 
 import argparse
@@ -169,19 +171,21 @@ def main(argv=None):
         print(f"checkpoint: git add failed: {added.stderr.strip()}", file=sys.stderr)
         return 1
 
-    # 4. Nothing staged means the task legitimately produced no diff.
-    if _git(root, "diff", "--cached", "--quiet").returncode == 0:
-        print("SKIP: no changes")
-        return 0
+    # 4. Nothing staged means the task legitimately produced no diff. It still
+    #    gets a commit: the trailers are the only durable record of completion,
+    #    and an empty commit carries them without fabricating a diff.
+    empty = _git(root, "diff", "--cached", "--quiet").returncode == 0
+    allow_empty = ["--allow-empty"] if empty else []
 
     # 5. Commit, carrying the trailers that record completion.
-    committed = _git(root, "commit", "-q", "-m", args.message, *trailers)
+    committed = _git(root, "commit", "-q", "-m", args.message, *allow_empty, *trailers)
     if committed.returncode != 0:
         print(f"checkpoint: git commit failed: {committed.stderr.strip()}", file=sys.stderr)
         return 1
 
     sha = _git(root, "rev-parse", "--short", "HEAD").stdout.strip()
-    print(f"{sha} {args.task} gate={args.gate} {PASS}")
+    suffix = " empty" if empty else ""
+    print(f"{sha} {args.task} gate={args.gate} {PASS}{suffix}")
     return 0
 
 

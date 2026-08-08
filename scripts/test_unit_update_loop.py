@@ -236,22 +236,28 @@ class TaskTracking(unittest.TestCase):
             _run(root, "--task-done", "T5")
             self.assertIsNone(_read(root)["current_task"])
 
-    def test_a_no_diff_task_is_recorded_so_detect_phase_can_union_it(self):
+    def test_the_no_diff_flag_is_gone(self):
+        # T37: `checkpoint.py` commits a no-diff task empty, so its completion
+        # is a git trailer. A flag that wrote the same fact into the one place
+        # git cannot rebuild would be the defect, not the record.
         with tempfile.TemporaryDirectory() as root:
             _seed(root)
-            self.assertEqual(_run(root, "--task-done", "T4", "--no-diff").returncode, 0)
-            self.assertEqual(_read(root)["no_diff_tasks"], ["T4"])
+            self.assertNotEqual(_run(root, "--task-done", "T4", "--no-diff").returncode, 0)
 
-    def test_a_task_with_a_diff_is_not_recorded_as_no_diff(self):
+    def test_no_task_ever_lands_in_no_diff_tasks(self):
         with tempfile.TemporaryDirectory() as root:
             _seed(root)
-            _run(root, "--task-done", "T4", "--commit", "abc1234")
+            _run(root, "--task-done", "T4")
+            _run(root, "--task-done", "T5", "--commit", "abc1234")
             self.assertEqual(_read(root)["no_diff_tasks"], [])
 
-    def test_no_diff_without_a_task_is_rejected(self):
+    def test_entries_written_before_the_change_are_preserved(self):
+        # An in-flight run keeps the history it already recorded; detect_phase
+        # still unions it.
         with tempfile.TemporaryDirectory() as root:
-            _seed(root)
-            self.assertNotEqual(_run(root, "--no-diff", "--iteration-done").returncode, 0)
+            _seed(root, no_diff_tasks=["T4"])
+            self.assertEqual(_run(root, "--task-done", "T5").returncode, 0)
+            self.assertEqual(_read(root)["no_diff_tasks"], ["T4"])
 
     def test_the_batch_is_recorded_as_a_list_of_task_ids(self):
         with tempfile.TemporaryDirectory() as root:

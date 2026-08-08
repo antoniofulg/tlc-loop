@@ -104,7 +104,7 @@ state git cannot express.
 | `harness_resolved` | string | bootstrap | The harness detected at bootstrap, or the one named explicitly. |
 | `current_batch` | array of string | update | Task ids in the batch being executed, e.g. `["T8","T9"]`. |
 | `current_task` | string or null | update | Task started but not yet committed. `null` between tasks. |
-| `no_diff_tasks` | array of string | update | Tasks that legitimately produced no diff. |
+| `no_diff_tasks` | array of string | nothing | Legacy. Tasks that produced no diff, recorded here before they were committed empty. Still read. |
 | `reconciled` | array of object | update | Tasks where git overrode a `tasks.md` tick. See below. |
 | `verify` | object | bootstrap, update | Verification round state. See below. |
 | `counters` | object | bootstrap, update | Runaway detectors. See below. |
@@ -122,13 +122,15 @@ state git cannot express.
 
 ### `no_diff_tasks`
 
-A config-only or documentation-only task can pass its gate while changing
-nothing that git will commit. `checkpoint.py` prints `SKIP: no changes` and
-creates no commit, so no `Task:` trailer exists to read back.
+**Legacy. Nothing writes it.** A config-only or documentation-only task can
+pass its gate while changing nothing that git will commit. `checkpoint.py` now
+commits it with `--allow-empty`, carrying the same `Task:` and `Gate:`
+trailers, so its completion is in git like every other task's.
 
-Without this list `detect_phase.py` would see the task as pending forever and
-re-run it on every iteration. It unions this list with the git trailers to get
-the real set of completed tasks. Entries are added once and never removed.
+Before that, such a task was recorded here and nowhere else - which meant
+deleting `loop.json` re-dispatched it. `detect_phase.py` still unions this list
+with the git trailers so a run that was already in flight keeps the entries it
+wrote. New runs leave it empty.
 
 ### `reconciled`
 

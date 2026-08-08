@@ -147,6 +147,21 @@ class DetectPhaseCase(unittest.TestCase):
         for task_id in task_ids:
             self.commit(f"feat: {task_id.lower()}", f"{task_id.lower()}.txt", task=task_id)
 
+    def complete_without_diff(self, task_id):
+        """What `checkpoint.py` writes for a task that changed nothing (T37)."""
+        _git(
+            self.root,
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            f"docs: {task_id.lower()}",
+            "--trailer",
+            f"Task: {task_id}",
+            "--trailer",
+            "Gate: quick PASS",
+        )
+
     def state_path(self):
         return os.path.join(self.feature_dir, "loop.json")
 
@@ -230,6 +245,22 @@ class AbsentState(DetectPhaseCase):
         self.write_state()  # exactly what init_loop.py writes
         self.assertEqual(self.line(), before)
 
+    def test_a_no_diff_task_survives_deleting_the_state_file(self):
+        # T37: before the empty commit, a task completed with no diff lived
+        # only in `loop.json`, so deleting the file silently re-dispatched it.
+        # Its trailer is now in git, so the rebuilt state names the same task.
+        self.write_state()
+        self.complete("T1", "T2")
+        self.complete_without_diff("T3")
+        before = self.line()
+        self.assertEqual(before, "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6")
+
+        os.unlink(self.state_path())
+        self.assertEqual(self.line(), "phase=0 action=bootstrap")
+
+        self.write_state()  # a fresh state: no_diff_tasks is empty
+        self.assertEqual(self.line(), before)
+
 
 class ExecuteBatch(DetectPhaseCase):
     def test_pending_tasks_print_the_packed_batch_and_explicit_ids(self):
@@ -253,10 +284,20 @@ class ExecuteBatch(DetectPhaseCase):
             self.line(), "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6"
         )
 
-    def test_no_diff_tasks_are_unioned_with_the_git_trailers(self):
+    def test_a_legacy_no_diff_entry_is_still_unioned_with_the_git_trailers(self):
+        # T37 stopped writing `no_diff_tasks`, but a run already in flight when
+        # that landed has entries in it. They must still count as done.
         self.write_state(no_diff_tasks=["T4"])
         self.complete("T1", "T2", "T3")
         self.assertEqual(self.line(), "phase=B action=execute_batch batch=P2 tasks=T5,T6")
+
+    def test_a_task_committed_empty_counts_as_done(self):
+        self.complete("T1", "T2")
+        self.complete_without_diff("T3")
+        self.write_state()
+        self.assertEqual(
+            self.line(), "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6"
+        )
 
     def test_git_wins_over_conflicting_state(self):
         # loop.json still claims T1 is the task in flight and T1..T3 are the

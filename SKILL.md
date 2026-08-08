@@ -50,9 +50,9 @@ Project data under `.specs/` is always read and written relative to `<root>`,
 which is what `--root` carries.
 
 **Git is the status truth.** Completed tasks come from
-`git log --format="%(trailers:key=Task,valueonly)"`, unioned with
-`no_diff_tasks`. When `loop.json` and git disagree, git wins. This is what
-makes `loop.json` disposable and resume correct.
+`git log --format="%(trailers:key=Task,valueonly)"`. A task that changed
+nothing is committed empty, so it carries a trailer like any other. When
+`loop.json` and git disagree, git wins. This is what makes resume correct.
 
 **Two single writers, no exceptions.** `checkpoint.py` is the only writer of
 git trailers. `update_loop.py` is the only writer of `loop.json` after
@@ -200,11 +200,9 @@ The detect line names the batch and its exact task ids. Use those ids. Never
      --task T7 --gate quick --gate-result PASS --message "<conventional commit>"
    ```
    Exit 2 is a refusal: no asserted pass, or `check_commit.py` rejected the
-   message. `SKIP: no changes` is success for a task that legitimately produced
-   no diff - record it so detection stops re-dispatching it:
-   ```bash
-   python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> --task-done T7 --no-diff
-   ```
+   message. A task that legitimately produced no diff is committed empty and
+   the line ends `PASS empty`; nothing else has to be recorded, because the
+   trailers are in git.
 5. **Record a `reconciled=<ids>` field if the detect line carried one.** It
    means `tasks.md` ticks those tasks as done and git does not confirm it. Git
    already decided - they are in the batch and you run them - but the override
@@ -225,8 +223,7 @@ The detect line names the batch and its exact task ids. Use those ids. Never
 A worker that fails a task reports it and stops. The next batch does not start
 until that failure is resolved.
 
-Done when: every task in the batch carries a `Task:` trailer or sits in
-`no_diff_tasks`.
+Done when: every task in the batch carries a `Task:` trailer.
 
 #### Phase V - Verify
 

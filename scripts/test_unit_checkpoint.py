@@ -8,7 +8,7 @@ Derived from T11's "Done when" criteria and:
     non-zero exit aborts the commit
   - LOOP-02 AC 4: at most one commit per task, never batched
   - LOOP-02 AC 6: a task producing no file changes records completion without
-    fabricating a source diff
+    fabricating a source diff - as an empty commit carrying the trailers (T37)
 
 Each test builds a throwaway skill layout - this skill plus a sibling
 `tlc-spec-driven` - and a separate tmpdir git repo. The sibling's
@@ -271,20 +271,57 @@ class MessageAlreadyCarriesTrailers(CheckpointCase):
         self.assertEqual(self.commit_count(), before)
 
 
-class NoChangesPath(CheckpointCase):
-    """LOOP-02 AC 6: a task with no diff completes without an empty commit."""
+class NoDiffPath(CheckpointCase):
+    """T37 / LOOP-02 AC 6: a task with no diff is recorded as an empty commit.
 
-    def test_it_prints_the_skip_line(self):
-        proc = self.checkpoint()
-        self.assertIn("SKIP: no changes", proc.stdout)
+    AC 6 forbids fabricating a source diff, not committing. An empty commit
+    fabricates nothing and carries the trailers, which is what makes the
+    completion durable in git instead of only in `loop.json`.
+    """
 
     def test_it_exits_zero(self):
         self.assertEqual(self.checkpoint().returncode, 0)
 
-    def test_it_creates_no_commit(self):
+    def test_it_creates_a_commit(self):
         before = self.commit_count()
         self.checkpoint()
-        self.assertEqual(self.commit_count(), before)
+        self.assertEqual(self.commit_count(), before + 1)
+
+    def test_that_commit_carries_the_task_trailer(self):
+        self.checkpoint(task="T7")
+        self.assertEqual(self.trailer("Task"), "T7")
+
+    def test_that_commit_carries_the_gate_trailer(self):
+        self.checkpoint(task="T7", gate="quick")
+        self.assertEqual(self.trailer("Gate"), "quick PASS")
+
+    def test_that_commit_fabricates_no_source_diff(self):
+        self.checkpoint()
+        changed = _git(
+            self.root, "show", "--name-only", "--format=", "HEAD"
+        ).stdout.split()
+        self.assertEqual(changed, [])
+
+    def test_the_line_reports_the_commit_as_empty(self):
+        proc = self.checkpoint(task="T7", gate="quick")
+        sha = _git(self.root, "rev-parse", "--short", "HEAD").stdout.strip()
+        self.assertEqual(proc.stdout.strip(), f"{sha} T7 gate=quick PASS empty")
+
+    def test_a_task_that_changed_something_is_not_reported_as_empty(self):
+        self.write("work.txt", "changed")
+        proc = self.checkpoint(task="T7", gate="quick")
+        self.assertNotIn("empty", proc.stdout)
+
+    def test_completed_tasks_reads_the_no_diff_task_back(self):
+        # The point of the empty commit: `_gitio` sees it like any other task,
+        # so completion no longer depends on `loop.json` surviving.
+        self.checkpoint(task="T7")
+        sys.path.insert(0, SCRIPTS)
+        import _gitio
+
+        ids, duplicates = _gitio.completed_tasks(self.root)
+        self.assertEqual(ids, ["T7"])
+        self.assertEqual(duplicates, [])
 
 
 class SelectiveStaging(CheckpointCase):

@@ -177,8 +177,11 @@ def main(argv=None):
         print(f"phase=H action=halt reason={reason} detail={_quote(detail)}")
         return 0
 
-    # 3. Git is authoritative for what is done; no_diff_tasks covers the tasks
-    #    that legitimately produced no commit.
+    # 3. Git is authoritative for what is done. A task that produced no diff is
+    #    committed empty, so it carries a trailer like any other. The union
+    #    with `no_diff_tasks` is kept for states written before that change,
+    #    which recorded such a task here and nowhere else; nothing writes the
+    #    field any more.
     try:
         committed, duplicates = _gitio.completed_tasks(root)
     except _gitio.GitError as exc:

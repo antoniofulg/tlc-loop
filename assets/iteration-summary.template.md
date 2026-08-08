@@ -6,7 +6,7 @@
 - **Outcome:** {{ outcome }} <!-- completed | halted | blocked -->
 - **Batch:** {{ batch_label_and_task_ids }} <!-- e.g. P1+P2 / T1,T2,T3 - or n/a -->
 - **Gate:** {{ gate_level }} {{ gate_result }} <!-- or n/a -->
-- **Checkpoint:** {{ shas_or_skip }} <!-- short SHA per task, "SKIP: no changes", or n/a (phase not B/F) -->
+- **Checkpoint:** {{ shas }} <!-- short SHA per task, "<sha> empty" for a task that changed nothing, or n/a (phase not B/F) -->
 - **Verify:** {{ verdict_and_report_path }} <!-- PASS|FAIL + validation.md path, or n/a -->
 - **Halt reason:** {{ reason_and_detail_or_none }}
 - **State:** {{ update_loop_output_line }} <!-- the "updated feature=... iteration=N status=..." line -->

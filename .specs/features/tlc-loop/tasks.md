@@ -96,6 +96,16 @@ T21 -> T23
 T24
 ```
 
+### Phase 12: Overnight stability
+
+What a run left alone all night actually needs. Found by auditing every config
+key against the code that reads it - the same check that exposed `max_rounds`.
+
+```
+T37 -> T38
+T39
+```
+
 ### Phase 11: Verifier round 3 fixes
 
 ```
@@ -420,7 +430,7 @@ T30
 - [x] A commit is created only when the caller asserts a passing gate; anything else exits non-zero without committing
 - [x] The message is validated with `check_commit.py` before staging, and a non-zero exit aborts
 - [x] The commit carries `Task: <id>` and `Gate: <level> PASS` trailers, readable back with `%(trailers:key=Task,valueonly)`
-- [x] A task with no file changes prints `SKIP: no changes` and exits 0 without an empty commit
+- [x] ~~A task with no file changes prints `SKIP: no changes` and exits 0 without an empty commit~~ - superseded by T37: it is committed with `--allow-empty` so the trailers are durable
 - [x] `--no-verify` appears nowhere in the implementation
 - [x] Unit tests build a tmpdir repo and cover: successful commit with trailers read back, refusal without a passing gate, refusal on an invalid message, and the no-changes path
 
@@ -1251,3 +1261,82 @@ T30
 
 **Tests**: unit
 **Gate**: build
+
+---
+
+### T37: Make a no-diff task durable in git ✅
+
+**What**: Record a task that changed nothing as an empty commit carrying its trailers, so completion survives the loss of `loop.json`.
+**Where**: `scripts/checkpoint.py`
+**Depends on**: None
+**Reuses**: `_gitio.trailer_args`; the existing no-changes branch.
+**Requirement**: LOOP-02
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [x] A task with no file changes produces a commit carrying `Task:` and `Gate:`, created with `--allow-empty`
+- [x] LOOP-02 AC 6 still holds: no source diff is fabricated, because an empty commit has none
+- [x] `_gitio.completed_tasks` reads that task back like any other, so `no_diff_tasks` is no longer the only record of it
+- [x] Deleting `loop.json` and re-bootstrapping no longer re-dispatches a completed no-diff task
+- [x] `no_diff_tasks` stays readable for states written before this change, so an in-flight run does not lose its history
+- [x] Unit tests cover: the empty commit and its trailers, the read-back, and the delete-and-rebuild path
+
+**Tests**: unit
+**Gate**: quick
+
+---
+
+### T38: Retract the disposability claim wherever it is now wrong
+
+**What**: Sweep every statement about what surviving `loop.json` deletion costs, so all of them match the behaviour T37 leaves.
+**Where**: `references/state-schema.md`
+**Depends on**: T37
+**Reuses**: The corrected wording already in `README.md`.
+**Requirement**: LOOP-01
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [ ] Every claim about deleting `loop.json` names what is actually lost, in `references/state-schema.md`, `references/phase-transitions.md`, `scripts/detect_phase.py`, `README.md`, and the feature's `design.md`
+- [ ] The sentence naming "three fields" agrees with the list that follows it
+- [ ] No statement calls the file disposable without saying disposable for what
+- [ ] The claim that reconstruction is safe is either true after T37 or removed
+
+**Tests**: none
+**Gate**: build
+
+---
+
+### T39: Enforce the limits the config only declares
+
+**What**: Make `executor_timeout_seconds`, `continue.in_turn`, and `version` do something, or stop offering them.
+**Where**: `scripts/resolve_stage.py`
+**Depends on**: None
+**Reuses**: `_config`; the halt vocabulary.
+**Requirement**: LOOP-06
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [ ] `executor_timeout_seconds` reaches whoever spawns the process: emitted by `resolve_stage.py`, applied by `loop.sh` for the respawn it owns, and stated in `SKILL.md` as binding on a dispatched stage
+- [ ] Expiry is an executor failure with a recorded halt, not a hang
+- [ ] `continue.in_turn` is honoured where the continue gate is decided, or removed from the config, the schema, and `SKILL.md`
+- [ ] `version` is validated at load, or removed
+- [ ] A test asserts every key `_config` defaults is read somewhere, so the next declared-but-ignored key fails the gate instead of waiting for an audit
+- [ ] Unit tests cover the timeout emission and the `in_turn` decision
+
+**Tests**: unit
+**Gate**: quick

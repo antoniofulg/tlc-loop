@@ -63,14 +63,10 @@ happened, it is the wrong box: find the file or the exit code that proves it.
 - [ ] The gate was re-run by the orchestrator. The exit code used is its own,
       not the executor's claim.
       *Evidence: the gate command and its exit code in the transcript.*
-- [ ] One `checkpoint.py` call per task, each printing a short SHA or
-      `SKIP: no changes`.
-- [ ] Every `SKIP: no changes` has a matching
-      `update_loop.py --task-done TN --no-diff`, or detection will re-dispatch
-      that task forever.
-      *Evidence: `no_diff_tasks` in `loop.json`.*
+- [ ] One `checkpoint.py` call per task, each printing a short SHA. A task that
+      changed nothing prints one too, ending `PASS empty`.
 - [ ] `git log --format="%(trailers:key=Task,valueonly)"` now lists every task
-      in the batch.
+      in the batch, including any committed empty.
 - [ ] HEAD moved only through `checkpoint.py`. No executor commit.
       *Evidence: every commit since the batch started carries a `Task:` trailer
       and a Conventional Commits header.*
@@ -124,7 +120,7 @@ happened, it is the wrong box: find the file or the exit code that proves it.
 - [ ] The `validation.md` verdict is PASS and cites `file:line` evidence, not
       prose.
 - [ ] `pending` is genuinely empty: every task in `tasks.md` carries a `Task:`
-      trailer or sits in `no_diff_tasks`.
+      trailer.
       *Evidence: the trailer list against the parsed plan.*
 - [ ] `--status complete` was recorded.
       *Evidence: `status` in `loop.json`.*

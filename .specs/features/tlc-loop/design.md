@@ -211,7 +211,7 @@ still defines what a task cycle is.
   2. Validates the message with `check_commit.py`; non-zero aborts before staging
   3. Stages the task's files plus `tasks.md` / `spec.md` traceability updates
   4. Commits with `--trailer "Task: TN" --trailer "Gate: <level> PASS"`
-  5. Prints the short SHA, or `SKIP: no changes` when the task legitimately produced no diff
+  5. Commits with `--allow-empty` when the task legitimately produced no diff, so the trailers still land; prints the short SHA, suffixed `empty`
 - **Never** uses `--no-verify`.
 - **Dependencies**: git, `check_commit.py`
 
@@ -298,7 +298,7 @@ Stdlib `json`, written with `indent=2` and sorted keys so diffs stay readable.
 | `status` | `active` \| `blocked` \| `halted` \| `complete` |
 | `harness_resolved` | Result of auto-detection at bootstrap (D10) |
 | `current_task` | Started but not yet committed; `null` between iterations |
-| `no_diff_tasks` | Tasks that legitimately produced no diff, so carry no git trailer; unioned with git trailers by `detect_phase.py` |
+| `no_diff_tasks` | Legacy, no writer. Tasks that produced no diff, recorded here before T37 committed them empty; still unioned with git trailers by `detect_phase.py` so an in-flight run keeps its history |
 | `halt.reason` | `no_progress` \| `gate_stuck` \| `executor` \| `limit` \| `blocker` \| `blast_radius` |
 | `iterations` | Append-only, capped at the last 50 |
 
@@ -407,7 +407,7 @@ Accepted `effort` values per provider:
 | `command` executors run non-interactively with auto-approval | `references/executors.md` | An unattended agent with `--force` / `--dangerously-skip-permissions` can do real damage | Blast-radius halt is *halt*, not *ask* — asking is useless with nobody watching. Documented as a required precondition, not a default |
 | Non-interactive executor can hang with no output | `resolve_stage.py` dispatch | A silent hang looks identical to slow work; the run stalls until a human notices | Per-invocation timeout in config; timeout counts as an executor failure and halts |
 | `tasks.md` has no status field, so a human tick and git can disagree | `tasks.md` | Confusion about what is done | Git wins by design (LOOP-01 AC 4); reconciliation is recorded, never silent |
-| Tasks with no diff (config-only) under trailer-based status | `checkpoint.py` | A task could complete without producing a trailer, so `detect_phase` re-runs it forever | `SKIP: no changes` path records completion in `loop.json`; `detect_phase` unions git trailers with that list. Explicit task + test |
+| Tasks with no diff (config-only) under trailer-based status | `checkpoint.py` | A task could complete without producing a trailer, so `detect_phase` re-runs it forever | Committed with `--allow-empty`, carrying the same trailers: no diff is fabricated and the completion is in git. Explicit task + test (T37) |
 | Batch worker context could exceed budget on a coarse phase | `sub-agents.md` batching | Worker degrades or truncates | Reuse the existing coarse-phase caveat: a phase over ~1.5× budget is a Tasks-authoring smell, surfaced at bootstrap |
 
 ---
@@ -419,7 +419,7 @@ Only the non-obvious ones. The twelve locked decisions live in `context.md`.
 | Decision | Choice | Rationale |
 | --- | --- | --- |
 | Serialisation formats | Config in TOML (`tomllib`), state in JSON (`json`) — both stdlib | The zero-dependency rule ruled out PyYAML, and the alternative was a hand-written YAML subset reader plus emitter: the riskiest component in the design, for no user-visible gain. `tomllib` has been stdlib since 3.11, TOML is human-editable, and it is already the format of `~/.codex/config.toml`. Cost: TOML has no `null`, so an omitted limit key means unlimited |
-| Tracking tasks that produce no diff | `no_diff_tasks` list in `loop.json`, unioned with git trailers | A config-only task leaves no commit, so a trailer-only derivation would re-run it forever. The list is the one piece of completion state git cannot express, and it is regenerated from the run rather than being authoritative |
+| Tracking tasks that produce no diff | An empty commit carrying the `Task:` and `Gate:` trailers | A config-only task changes nothing, and LOOP-02 AC 6 forbids fabricating a source diff. An empty commit has none, so it satisfies the AC while keeping completion where every other task's lives. The earlier `no_diff_tasks` list put it in the one place git cannot rebuild, so deleting `loop.json` re-dispatched a finished task (T37) |
 | Fix as its own phase (`F`) rather than a step inside `V` | Separate phase | Makes author ≠ verifier visible in the detect output, and lets the two run on different providers per D6 — impossible if they share a phase |
 | Halt as a phase (`H`) rather than an exit code | Phase | `loop.sh`, `/goal`, and the in-turn motor all read one contract. A halt reason in the same vocabulary means one parser, not three |
 | Batch identity in the detect line | Phase labels plus explicit task IDs | Phase labels alone are ambiguous after a `tasks.md` edit; explicit IDs make the dispatch auditable in the transcript the evaluator reads |
