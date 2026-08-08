@@ -205,7 +205,15 @@ The detect line names the batch and its exact task ids. Use those ids. Never
    ```bash
    python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> --task-done T7 --no-diff
    ```
-5. **Close the iteration.**
+5. **Record a `reconciled=<ids>` field if the detect line carried one.** It
+   means `tasks.md` ticks those tasks as done and git does not confirm it. Git
+   already decided - they are in the batch and you run them - but the override
+   is recorded, not swallowed:
+   ```bash
+   python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> --reconciled T4,T5
+   ```
+   Recording is keyed by task id, so repeating it costs nothing.
+6. **Close the iteration.**
    ```bash
    python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> \
      --iteration-done --phase B --action "executed P1+P2" \

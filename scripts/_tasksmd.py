@@ -4,6 +4,13 @@
 `Depends on` / `Tests` / `Gate` fields. Task *status* never comes from here, it
 comes from git trailers.
 
+One field is status-shaped and is deliberately not status: `done` is the human
+tick (`✅`) on a task's own header. It is a *claim* that the task is finished,
+not the answer to whether it is. `tasks.md` has no status field, so a tick and
+git can disagree; git wins and the override is recorded rather than applied
+silently (LOOP-01 AC 5). A header with no tick makes no claim either way, which
+is why only a ticked-but-uncommitted task is a contradiction.
+
 Field patterns follow the ones `tlc-spec-driven/scripts/validate_tasks.py`
 already accepts, so a file that validates there parses here, bold markers and
 all.
@@ -26,6 +33,8 @@ TASK_ID_RE = re.compile(r"\bT\d+\b", re.IGNORECASE)
 DEPENDS_RE = re.compile(r"^\*{0,2}Depends on\*{0,2}\s*:\s*(.*)$", re.IGNORECASE)
 TESTS_RE = re.compile(r"^\*{0,2}Tests\*{0,2}\s*:\s*(.*)$", re.IGNORECASE)
 GATE_RE = re.compile(r"^\*{0,2}Gate\*{0,2}\s*:\s*(.*)$", re.IGNORECASE)
+#: The completion tick a human leaves on a finished task's header.
+DONE_MARK_RE = re.compile(r"✅\s*$")
 
 
 def _phase_membership(lines):
@@ -65,8 +74,9 @@ def parse(path):
     """Return the file's tasks, in document order.
 
     Each entry is a dict with `id`, `phase` (int or None), `depends_on` (list),
-    `tests` (str or None) and `gate` (str or None). A file with no tasks yields
-    an empty list.
+    `tests` (str or None), `gate` (str or None) and `done` (bool - the header
+    carries the human completion tick). A file with no tasks yields an empty
+    list.
     """
     with open(path, encoding="utf-8", errors="replace") as handle:
         lines = handle.read().splitlines()
@@ -84,6 +94,7 @@ def parse(path):
                 "depends_on": [],
                 "tests": None,
                 "gate": None,
+                "done": bool(DONE_MARK_RE.search(stripped)),
             }
             tasks.append(current)
             continue

@@ -24,6 +24,10 @@ Output vocabulary (exactly one of these, on stdout):
     phase=E action=done
     phase=H action=halt reason=<slug> detail="<text>"
 
+A `phase=B` line also carries `reconciled=<ids>` when `tasks.md` ticks a task
+git does not confirm. It is advisory: git already decided, and the field exists
+so the orchestrator can record the override instead of it passing silently.
+
 An unreadable `loop.json` is not one of those failures: it is a halt with
 `reason=state_corrupt`, printed on stdout like any other phase line.
 
@@ -157,16 +161,30 @@ def main(argv=None):
         return 1
     planned = _tasksmd.parse(tasks_path)
 
+    # 4b. Where the plan and git disagree, git wins - and says so out loud.
+    #     A human tick on a task header claims completion; a missing `Task:`
+    #     trailer denies it. The task stays pending, and the disagreement is
+    #     appended to the line so the orchestrator can record it through
+    #     `update_loop.py --reconciled` (LOOP-01 AC 5). Writing it here would
+    #     cost this script its read-only property, which is an AC of its own.
+    #     A reconciled task is by construction one git has not confirmed, so it
+    #     is always pending and the field can only ever ride a `phase=B` line.
+    notes = []
+    reconciled = [task["id"] for task in planned if task["done"] and task["id"] not in done]
+    if reconciled:
+        notes.append(f"reconciled={','.join(reconciled)}")
+
     # 5. Work remains: name the next batch and the exact tasks in it.
     pending = [task for task in planned if task["id"] not in done]
     if pending:
         batches, _oversized = _batching.pack(pending, config["execute"]["batch_size"])
         batch = batches[0]
         label = "+".join(f"P{phase}" for phase in batch["phases"])
-        print(
+        core = (
             f"phase=B action=execute_batch batch={label} "
             f"tasks={','.join(batch['tasks'])}"
         )
+        print(" ".join([core, *notes]))
         return 0
 
     # 6. Nothing pending. The sibling validator decides whether this is done.

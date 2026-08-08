@@ -75,8 +75,9 @@ trailers (D3, LOOP-01 AC 2):
 git log --reverse --format="%(trailers:key=Task,valueonly)"
 ```
 
-Git is authoritative. If `tasks.md` checkboxes and git history disagree, git
-wins. This is exactly what makes the file disposable: delete `loop.json`
+Git is authoritative. If a `tasks.md` tick and git history disagree, git wins
+and the override lands in `reconciled` below rather than passing silently.
+This is exactly what makes the file disposable: delete `loop.json`
 mid-run and the next detect still names the same next task, because progress
 was never stored here.
 
@@ -99,6 +100,7 @@ state git cannot express.
 | `current_batch` | array of string | update | Task ids in the batch being executed, e.g. `["T8","T9"]`. |
 | `current_task` | string or null | update | Task started but not yet committed. `null` between tasks. |
 | `no_diff_tasks` | array of string | update | Tasks that legitimately produced no diff. |
+| `reconciled` | array of object | update | Tasks where git overrode a `tasks.md` tick. See below. |
 | `verify` | object | bootstrap, update | Verification round state. See below. |
 | `counters` | object | bootstrap, update | Runaway detectors. See below. |
 | `halt` | object | update | Why the run stopped, if it did. See below. |
@@ -122,6 +124,32 @@ creates no commit, so no `Task:` trailer exists to read back.
 Without this list `detect_phase.py` would see the task as pending forever and
 re-run it on every iteration. It unions this list with the git trailers to get
 the real set of completed tasks. Entries are added once and never removed.
+
+### `reconciled`
+
+The audit trail of git overruling the plan (LOOP-01 AC 5). Each entry:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `task` | string | The task the two sides disagreed about. |
+| `winner` | string | Which side was taken. Always `git`; the field is there so the record reads on its own. |
+| `at` | string | UTC ISO-8601 when the override was recorded. |
+
+`tasks.md` has no status field, so the tick on a finished task's header is a
+claim rather than an answer. When a ticked task carries no `Task:` trailer,
+git wins and the task is dispatched again - and this list is why a later reader
+can tell that was a decision and not a bug. An unticked header is not the
+opposite claim, so a trailer with no tick records nothing.
+
+`detect_phase.py` finds the disagreement and prints it as `reconciled=<ids>` on
+the `phase=B` line; it cannot write, so the loop records it:
+
+```bash
+python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> --reconciled T4,T5
+```
+
+Entries are keyed by task id, so re-recording the same disagreement on every
+iteration until the tick or the history is fixed stores it exactly once.
 
 ---
 

@@ -236,6 +236,60 @@ class TaskTracking(unittest.TestCase):
             self.assertEqual(_read(root)["current_batch"], ["T1", "T2", "T3"])
 
 
+class ReconciliationRecord(unittest.TestCase):
+    """T31 / LOOP-01 AC 5: git overriding a `tasks.md` tick is recorded.
+
+    `detect_phase.py` finds the disagreement and prints it; it cannot write,
+    so this script is the half that makes the record durable. The entry names
+    the task and the side that won, which is what lets a later reader tell why
+    a task the plan calls finished was dispatched again.
+    """
+
+    def test_a_disagreement_is_recorded_with_the_task_and_the_winning_side(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root)
+            self.assertEqual(_run(root, "--reconciled", "T4").returncode, 0)
+            entries = _read(root)["reconciled"]
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["task"], "T4")
+            self.assertEqual(entries[0]["winner"], "git")
+            self.assertRegex(entries[0]["at"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+
+    def test_several_ids_in_one_call_are_each_recorded(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root)
+            _run(root, "--reconciled", "T4,T5")
+            self.assertEqual(
+                [e["task"] for e in _read(root)["reconciled"]], ["T4", "T5"]
+            )
+
+    def test_recording_the_same_reconciliation_twice_does_not_duplicate_it(self):
+        # Detection re-derives the disagreement every iteration, so the same
+        # ids arrive over and over until the tick or the history is fixed.
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root)
+            _run(root, "--reconciled", "T4")
+            _run(root, "--reconciled", "T4,T5")
+            _run(root, "--reconciled", "T4")
+            self.assertEqual(
+                [e["task"] for e in _read(root)["reconciled"]], ["T4", "T5"]
+            )
+
+    def test_an_unrelated_update_leaves_the_record_alone(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root)
+            _run(root, "--reconciled", "T4")
+            _run(root, "--iteration-done", "--phase", "B")
+            self.assertEqual([e["task"] for e in _read(root)["reconciled"]], ["T4"])
+
+    def test_reconciled_alone_is_a_real_action_not_a_no_op(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root)
+            proc = _run(root, "--reconciled", "T4")
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertNotIn("nothing to do", proc.stderr)
+
+
 class VerifyRounds(unittest.TestCase):
     """`--verify-round` feeds the fields detect_phase reads for phase V and F."""
 

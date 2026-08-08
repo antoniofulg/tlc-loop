@@ -37,6 +37,7 @@ class NewState(unittest.TestCase):
         self.assertEqual(state["current_batch"], [])
         self.assertIsNone(state["current_task"])
         self.assertEqual(state["no_diff_tasks"], [])
+        self.assertEqual(state["reconciled"], [])
         self.assertEqual(
             state["verify"],
             {"rounds": 0, "last_verdict": None, "last_report": None, "gaps_open": 0},
@@ -62,6 +63,27 @@ class RoundTrip(unittest.TestCase):
             state["no_diff_tasks"] = ["T4"]
             _state_io.save("demo", root, state)
             self.assertEqual(_state_io.load("demo", root), state)
+
+    def test_a_recorded_reconciliation_survives_the_round_trip(self):
+        # T31 / LOOP-01 AC 5: the record is durable, not a print.
+        with tempfile.TemporaryDirectory() as root:
+            _feature_dir(root)
+            state = _state_io.new_state("demo", "ship it", "codex")
+            state["reconciled"] = [{"task": "T4", "winner": "git", "at": "2026-08-08T00:00:00Z"}]
+            _state_io.save("demo", root, state)
+            self.assertEqual(
+                _state_io.load("demo", root)["reconciled"],
+                [{"task": "T4", "winner": "git", "at": "2026-08-08T00:00:00Z"}],
+            )
+
+    def test_a_non_list_reconciled_is_rejected(self):
+        with tempfile.TemporaryDirectory() as root:
+            _feature_dir(root)
+            state = _state_io.new_state("demo", "ship it", "codex")
+            state["reconciled"] = {"T4": "git"}
+            with self.assertRaises(_state_io.StateError) as ctx:
+                _state_io.save("demo", root, state)
+            self.assertIn("reconciled must be a list", str(ctx.exception))
 
     def test_save_writes_indent_2_and_sorted_keys(self):
         with tempfile.TemporaryDirectory() as root:

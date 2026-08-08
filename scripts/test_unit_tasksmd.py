@@ -186,6 +186,47 @@ class MissingOptionalField(unittest.TestCase):
         self.assertIsNone(_tasksmd.parse(path)[0]["phase"])
 
 
+class CompletionTick(unittest.TestCase):
+    """T31 / LOOP-01 AC 5: the human tick is read so git can contradict it.
+
+    `tasks.md` has no status field. The tick on a task header is the closest
+    thing to one, and reading it is what lets `detect_phase.py` notice that the
+    plan and git disagree. It never marks a task done on its own.
+    """
+
+    def parse(self, text):
+        path = _write(text)
+        self.addCleanup(os.unlink, path)
+        return {t["id"]: t for t in _tasksmd.parse(path)}
+
+    def test_a_ticked_header_is_done(self):
+        by_id = self.parse("### Phase 1: Only\n\n### T1: Shipped ✅\n\n**Gate**: quick\n")
+        self.assertTrue(by_id["T1"]["done"])
+
+    def test_an_unticked_header_is_not_done(self):
+        by_id = self.parse("### Phase 1: Only\n\n### T1: Pending\n\n**Gate**: quick\n")
+        self.assertFalse(by_id["T1"]["done"])
+
+    def test_the_tick_is_per_task_not_per_file(self):
+        by_id = self.parse(
+            "### Phase 1: Only\n\n"
+            "### T1: Shipped ✅\n\n**Gate**: quick\n\n"
+            "### T2: Pending\n\n**Gate**: quick\n"
+        )
+        self.assertEqual(
+            {task_id: task["done"] for task_id, task in by_id.items()},
+            {"T1": True, "T2": False},
+        )
+
+    def test_a_tick_in_the_body_is_not_a_completion_claim(self):
+        # Done-when checkboxes and prose ticks are acceptance criteria, not
+        # task state, so only the header carries the claim.
+        by_id = self.parse(
+            "### Phase 1: Only\n\n### T1: Pending\n\n- [x] ✅ a criterion\n**Gate**: quick\n"
+        )
+        self.assertFalse(by_id["T1"]["done"])
+
+
 class EmptyFile(unittest.TestCase):
     def test_a_file_with_no_tasks_returns_an_empty_list(self):
         path = _write("# demo Tasks\n\nNothing here yet.\n")

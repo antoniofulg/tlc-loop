@@ -1072,10 +1072,10 @@ T30
 
 ---
 
-### T31: Record git-versus-tasks.md reconciliation
+### T31: Record git-versus-tasks.md reconciliation ✅
 
 **What**: Persist the reconciliation when git history and `tasks.md` disagree about a task, closing the unimplemented half of LOOP-01 AC 5.
-**Where**: `scripts/update_loop.py`
+**Where**: `scripts/update_loop.py`, `scripts/_state_io.py`, `scripts/_tasksmd.py`, `scripts/detect_phase.py`, `references/state-schema.md`, `references/phase-transitions.md`, `SKILL.md`
 **Depends on**: None
 **Reuses**: `_state_io` schema; the disagreement `detect_phase.py` already computes.
 **Requirement**: LOOP-01
@@ -1087,12 +1087,14 @@ T30
 
 **Done when**:
 
-- [ ] `loop.json` carries a durable record of each reconciliation, written only through `update_loop.py`
-- [ ] The record names the task and which side won, so a later reader can tell git overrode the plan
-- [ ] `detect_phase.py` stays read-only and surfaces the disagreement in its printed line so the orchestrator can record it
-- [ ] Recording the same reconciliation twice does not duplicate the entry
-- [ ] `references/state-schema.md` documents the field
-- [ ] Unit tests cover: a disagreement recorded, the field surviving a load/save round trip, and idempotence
+- [x] `loop.json` carries a durable record of each reconciliation, written only through `update_loop.py`
+- [x] The record names the task and which side won, so a later reader can tell git overrode the plan
+- [x] `detect_phase.py` stays read-only and surfaces the disagreement in its printed line so the orchestrator can record it
+- [x] Recording the same reconciliation twice does not duplicate the entry
+- [x] `references/state-schema.md` documents the field
+- [x] Unit tests cover: a disagreement recorded, the field surviving a load/save round trip, and idempotence
+
+**Declared scope expansion**: the `Where` above is wider than the one-file `Where` this task shipped with. The disagreement is between `tasks.md` and git, so reading the tick belongs in `_tasksmd.py` (the only reader of that file), finding it belongs in `detect_phase.py` (the only deriver), and the field belongs in `_state_io.py` (the only codec). `update_loop.py` stays the single writer, and `detect_phase.py` stays read-only - both asserted.
 
 **Tests**: unit
 **Gate**: quick

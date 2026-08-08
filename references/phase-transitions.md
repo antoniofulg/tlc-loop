@@ -41,7 +41,7 @@ Every line the implementation can print, with the condition that produces it.
 | --- | --- |
 | `phase=0 action=bootstrap` | `loop.json` does not exist for this feature. |
 | `phase=H action=halt reason=<slug> detail="<text>"` | A halt condition holds. Checked before any work is described. |
-| `phase=B action=execute_batch batch=<label> tasks=<ids>` | At least one planned task is not yet done. |
+| `phase=B action=execute_batch batch=<label> tasks=<ids> [reconciled=<ids>]` | At least one planned task is not yet done. |
 | `phase=E action=done` | Nothing pending and `validate_state.py` exits 0. |
 | `phase=F action=fix round=<N>` | Nothing pending, not done, the last verdict was `FAIL` and gaps are still open. |
 | `phase=V action=verify round=<N>` | Nothing pending, not done, and no open gaps to fix. |
@@ -59,6 +59,12 @@ Every line the implementation can print, with the condition that produces it.
 - `round=<N>` on `phase=F` is the round whose gaps are being fixed:
   `verify.rounds`. A fix belongs to the round that found the gaps, so `V round=2`
   following `F round=1` reads as one cycle rather than two.
+- `reconciled=<ids>` lists, comma separated, the tasks a human ticked in
+  `tasks.md` that git does not confirm. Present only when there is at least
+  one, and only on `phase=B`: a task git has not confirmed is by definition
+  still pending, so no other line can carry it. It is advisory - git has
+  already decided and the task is in the batch like any other - and it exists
+  so the override can be recorded rather than passing silently.
 - `reason=<slug>` is one of `no_progress`, `gate_stuck`, `executor`, `limit`,
   `blocker`, `blast_radius`, `state_corrupt`, `verify_exhausted`.
 - `detail="<text>"` is always present on a halt line, always double quoted,
@@ -97,6 +103,17 @@ Step 4 is the one to be precise about. Commit trailers are authoritative. When
 `loop.json` and git disagree about a task, git decides and `loop.json` is
 treated as the stale side. A task recorded as `current_task` in state but
 already carrying a `Task:` trailer in git is **done**, not in flight.
+
+The plan can disagree out loud. `tasks.md` has no status field, so the tick a
+human leaves on a finished task's header is a claim, and a claim git does not
+confirm is a contradiction. Git wins: the task stays pending and is dispatched
+again. The contradiction is not swallowed - the ids ride the `phase=B` line as
+`reconciled=<ids>`, and the loop records them with
+`update_loop.py --reconciled <ids>`, which appends one entry per task naming
+the winning side (LOOP-01 AC 5). Recording is idempotent, so a disagreement
+that survives several iterations is stored once. The reverse case is not a
+contradiction: an unticked header claims nothing, so a trailer without a tick
+just means the plan was never annotated.
 
 `no_diff_tasks` is not an exception to this rule. It is the one piece of
 completion state git cannot express: a config-only or docs-only task that

@@ -268,6 +268,89 @@ class ExecuteBatch(DetectPhaseCase):
         )
 
 
+class Reconciliation(DetectPhaseCase):
+    """T31 / LOOP-01 AC 5: git overrides a `tasks.md` tick, and says so.
+
+    `tasks.md` has no status field, so a human tick on a task header can claim
+    a completion git never recorded. Git is the source of truth: the task stays
+    pending. The disagreement rides the phase line so the orchestrator can
+    record it through `update_loop.py`; this script must not write it itself.
+    """
+
+    def tick(self, *task_ids):
+        """Re-write tasks.md with a completion tick on the named headers."""
+        wanted = {task_id.upper() for task_id in task_ids}
+        lines = []
+        for line in TASKS_MD.splitlines():
+            if line.startswith("### T") and line.split(":")[0][4:].upper() in wanted:
+                line += " ✅"
+            lines.append(line)
+        with open(os.path.join(self.feature_dir, "tasks.md"), "w", encoding="utf-8") as fh:
+            fh.write("\n".join(lines) + "\n")
+
+    def test_a_tick_git_does_not_confirm_is_surfaced_on_the_line(self):
+        self.write_state()
+        self.tick("T1")
+        self.assertEqual(
+            self.line(),
+            "phase=B action=execute_batch batch=P1+P2 "
+            "tasks=T1,T2,T3,T4,T5,T6 reconciled=T1",
+        )
+
+    def test_every_disagreeing_task_is_named(self):
+        self.write_state()
+        self.tick("T1", "T4")
+        self.assertTrue(self.line().endswith(" reconciled=T1,T4"), self.line())
+
+    def test_the_ticked_task_is_still_dispatched_because_git_decides(self):
+        # The point of the record: the plan says done, the loop runs it anyway.
+        self.write_state()
+        self.tick("T1")
+        self.assertIn("tasks=T1,", self.line())
+
+    def test_a_tick_git_confirms_is_no_disagreement(self):
+        self.write_state()
+        self.tick("T1")
+        self.complete("T1")
+        self.assertEqual(
+            self.line(), "phase=B action=execute_batch batch=P1+P2 tasks=T2,T3,T4,T5,T6"
+        )
+
+    def test_an_unticked_plan_surfaces_nothing(self):
+        self.write_state()
+        self.complete("T1", "T2", "T3")
+        self.assertEqual(
+            self.line(), "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6"
+        )
+
+    def test_a_no_diff_task_is_not_a_disagreement(self):
+        # It carries no trailer by design, so a tick on it contradicts nothing.
+        self.write_state(no_diff_tasks=["T4"])
+        self.tick("T4")
+        self.assertNotIn("reconciled=", self.line())
+
+    def test_surfacing_the_disagreement_still_writes_nothing(self):
+        self.write_state()
+        self.tick("T1")
+        with open(self.state_path(), "rb") as fh:
+            state_before = fh.read()
+        porcelain_before = _git(self.root, "status", "--porcelain")
+        head_before = _git(self.root, "rev-parse", "HEAD")
+
+        self.assertIn("reconciled=T1", self.line())
+
+        with open(self.state_path(), "rb") as fh:
+            self.assertEqual(fh.read(), state_before)
+        self.assertEqual(_git(self.root, "status", "--porcelain"), porcelain_before)
+        self.assertEqual(_git(self.root, "rev-parse", "HEAD"), head_before)
+
+    def test_the_disagreement_never_costs_the_single_line_contract(self):
+        self.write_state()
+        self.tick("T1", "T2", "T3")
+        proc = self.detect()
+        self.assertEqual(len(proc.stdout.splitlines()), 1, proc.stdout)
+
+
 class Verify(DetectPhaseCase):
     def test_no_pending_and_no_report_prints_verify_round_one(self):
         self.write_state()

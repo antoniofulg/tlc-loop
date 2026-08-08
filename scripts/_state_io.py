@@ -29,6 +29,7 @@ REQUIRED_KEYS = (
     "current_batch",
     "current_task",
     "no_diff_tasks",
+    "reconciled",
     "verify",
     "counters",
     "halt",
@@ -63,6 +64,7 @@ def new_state(feature, objective, harness):
         "current_batch": [],
         "current_task": None,
         "no_diff_tasks": [],
+        "reconciled": [],
         "verify": {"rounds": 0, "last_verdict": None, "last_report": None, "gaps_open": 0},
         "counters": {
             "started_at_ms": int(time.time() * 1000),
@@ -88,7 +90,7 @@ def _validate(state, where):
     for key in ("verify", "counters", "halt"):
         if not isinstance(state[key], dict):
             raise StateError(f"{where}: {key} must be an object")
-    for key in ("current_batch", "no_diff_tasks", "iterations"):
+    for key in ("current_batch", "no_diff_tasks", "reconciled", "iterations"):
         if not isinstance(state[key], list):
             raise StateError(f"{where}: {key} must be a list")
     if not isinstance(state["iteration"], int) or isinstance(state["iteration"], bool):

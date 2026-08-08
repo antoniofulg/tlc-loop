@@ -60,6 +60,7 @@ ACTION_FLAGS = (
     "batch",
     "task_started",
     "task_done",
+    "reconciled",
     "commit",
     "gate_attempt",
     "verify_round",
@@ -92,6 +93,11 @@ def build_parser():
         action="store_true",
         help="With --task-done: the task produced no diff, so it carries no git trailer",
     )
+    parser.add_argument(
+        "--reconciled",
+        metavar="TN[,TN...]",
+        help="Task ids where git overrode a tasks.md tick, as printed by detect_phase.py",
+    )
     parser.add_argument("--commit", metavar="SHA", help="A commit landed; resets the stall counter")
     parser.add_argument("--gate-attempt", metavar="TN", help="Record one failed gate attempt")
     parser.add_argument("--verify-round", choices=VERDICTS)
@@ -119,6 +125,20 @@ def apply(state, args):
             # The one piece of completion state git cannot express: a task that
             # legitimately produced no diff leaves no trailer to read back.
             state["no_diff_tasks"].append(args.task_done)
+
+    if args.reconciled:
+        # `tasks.md` ticked a task git does not confirm. Git decided, so the
+        # task stays pending; this is the durable record that the plan was
+        # overridden rather than believed (LOOP-01 AC 5). Keyed by task id, so
+        # re-recording the same disagreement on the next iteration is a no-op.
+        recorded = {entry.get("task") for entry in state["reconciled"]}
+        for task_id in [t.strip() for t in args.reconciled.split(",") if t.strip()]:
+            if task_id in recorded:
+                continue
+            recorded.add(task_id)
+            state["reconciled"].append(
+                {"task": task_id, "winner": "git", "at": _state_io.now_iso()}
+            )
 
     if args.gate_attempt:
         attempts = state["counters"].setdefault("gate_attempts", {})
