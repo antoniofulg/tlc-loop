@@ -646,7 +646,7 @@ T28
 
 ---
 
-### T20: Goal condition template
+### T20: Goal condition template ✅
 
 **What**: Ready-made `/goal` condition text anchored on the done-signature, for Claude Code and codex.
 **Where**: `assets/goal-condition.template.md`
@@ -661,10 +661,22 @@ T28
 
 **Done when**:
 
-- [ ] The condition text references the literal done-signature line including the feature name
-- [ ] The condition stays within the documented 4000-character limit
-- [ ] It is stated why the condition anchors on printed output rather than on a script
-- [ ] The codex native-goal equivalent is shown alongside
+- [x] The condition text references the literal done-signature line including the feature name
+- [x] The condition stays within the documented 4000-character limit
+- [x] It is stated why the condition anchors on printed output rather than on a script
+- [x] The codex native-goal equivalent is shown alongside
+
+> Measured, not asserted: the filled condition is 577 characters and the whole
+> file is 3160, both under 4000.
+>
+> The condition also matches a `phase=H action=halt` line. Matching only the
+> signature would restart the turn forever against a run that already stopped:
+> a halted run never prints the signature.
+>
+> The codex equivalent is shown as the **objective text**, which is what
+> mirrors into `thread_goals.objective`. The flag that attaches it is not
+> written down, because the codex probe is unresolved and an unverified
+> invocation is worse than none.
 
 **Tests**: none
 **Gate**: build
