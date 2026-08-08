@@ -96,6 +96,12 @@ T21 -> T23
 T24
 ```
 
+### Phase 10: Repository presentation
+
+```
+T35
+```
+
 ### Phase 9: Stale-verification gap
 
 Found by dogfooding the loop on its own repository.
@@ -1186,3 +1192,29 @@ T30
 
 **Tests**: unit
 **Gate**: quick
+
+---
+
+### T35: Human-facing README ✅
+
+**What**: A README for people browsing the repository, distinct from `SKILL.md`, which is written for an agent.
+**Where**: `README.md`
+**Depends on**: None
+**Reuses**: `SKILL.md` and the references, by pointer rather than by copy.
+**Requirement**: LOOP-06
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [x] A reader who has never seen this skill can install it and run one feature from the README alone
+- [x] The per-stage provider configuration is shown with a working example, since it is the capability the skill exists for
+- [x] The known limitations are stated plainly, including the untested repair loop and the unresolved codex marker
+- [x] Nothing is duplicated from `SKILL.md`: the README points at it rather than restating the workflow
+- [x] The deviation from the skill spec's no-README rule is recorded in `context.md` with its reason
+
+**Tests**: none
+**Gate**: build

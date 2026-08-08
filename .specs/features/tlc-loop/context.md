@@ -420,6 +420,24 @@ verdade: cobre Execute **e** Validate).
 
 ---
 
+### D15 — README, contrariando a regra dos skills
+
+**Decisão.** O repositório tem `README.md`, apesar de ambos os checklists de
+autoria de skills proibirem (`skill-best-practices` §2, `writing-skills` B2.2:
+*"The directory contains NO README.md"*).
+
+**Por quê.** A regra existe para o skill não carregar documentação humana que
+polui contexto e duplica o `SKILL.md`. Mas este diretório é **duas coisas**: um
+skill instalado e um repositório público que alguém abre no GitHub. Sem README,
+quem chega pelo segundo caminho não tem porta de entrada.
+
+**Como o custo foi contido.** O README aponta para o `SKILL.md` em vez de
+repetir o workflow — não há duplicação de fonte de verdade. Ele cobre o que o
+`SKILL.md` deliberadamente não cobre: instalação, requisitos, limitações
+conhecidas e desenvolvimento.
+
+---
+
 ## Pendências de verificação
 
 Não são suposições resolvidas — são coisas a confirmar antes ou durante a
