@@ -64,6 +64,8 @@ def new_state(feature, objective, harness):
         "harness_resolved": harness,
         "current_batch": [],
         "current_task": None,
+        # Legacy: read by detect_phase.py so a pre-T37 state keeps its history,
+        # written by nothing. A new run leaves it empty for good.
         "no_diff_tasks": [],
         "reconciled": [],
         "verify": {"rounds": 0, "last_verdict": None, "last_report": None,

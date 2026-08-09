@@ -1416,7 +1416,7 @@ T30
 
 ---
 
-### T42: Sweep the mechanism descriptions T38 did not reach
+### T42: Sweep the mechanism descriptions T38 did not reach ✅
 
 **What**: Update the places that describe the pre-T37 no-diff mechanism, which the phrasing scanner cannot see.
 **Where**: `references/phase-transitions.md`
@@ -1431,10 +1431,10 @@ T30
 
 **Done when**:
 
-- [ ] `references/phase-transitions.md` describes the empty-commit contract, not "therefore no trailer", and its Phase B exit rule no longer rests on `no_diff_tasks`
-- [ ] `scripts/test_int_end_to_end.py` and `.gitignore` no longer restate the retracted claim
-- [ ] The scanner from T38 is extended to catch a mechanism description, not only a phrasing, so this does not recur a fourth time
-- [ ] Every remaining mention of `no_diff_tasks` describes it as a legacy field that is read and never written
+- [x] `references/phase-transitions.md` describes the empty-commit contract, not "therefore no trailer", and its Phase B exit rule no longer rests on `no_diff_tasks`
+- [x] `scripts/test_int_end_to_end.py` and `.gitignore` no longer restate the retracted claim
+- [x] The scanner from T38 is extended to catch a mechanism description, not only a phrasing, so this does not recur a fourth time
+- [x] Every remaining mention of `no_diff_tasks` describes it as a legacy field that is read and never written
 
 **Tests**: unit
 **Gate**: quick

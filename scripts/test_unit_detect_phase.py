@@ -364,8 +364,9 @@ class Reconciliation(DetectPhaseCase):
             self.line(), "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6"
         )
 
-    def test_a_no_diff_task_is_not_a_disagreement(self):
-        # It carries no trailer by design, so a tick on it contradicts nothing.
+    def test_a_legacy_no_diff_entry_is_not_a_disagreement(self):
+        # A pre-T37 state records it as done, so a tick on it contradicts
+        # nothing - the union counts it, exactly as a trailer would.
         self.write_state(no_diff_tasks=["T4"])
         self.tick("T4")
         self.assertNotIn("reconciled=", self.line())

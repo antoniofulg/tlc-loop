@@ -1,7 +1,9 @@
 __pycache__/
 *.pyc
 
-# Loop run state: machine-owned, and reconstructible from git plus tasks.md.
+# Loop run state: machine-owned. Task progress rebuilds from git and tasks.md;
+# the objective, the limit budgets, the verify rounds and a recorded halt do
+# not - see references/state-schema.md for the bill.
 # checkpoint.py stages with `git add -A` when the caller names no paths, so
 # without this every task commit would carry a counter bump nobody reads.
 .specs/features/**/loop.json

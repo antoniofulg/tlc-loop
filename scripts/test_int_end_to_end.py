@@ -3,7 +3,8 @@
 Everything phases 1 to 6 built, driven together over one real git repository in
 a tmpdir: bootstrap writes state, detection names a batch, `checkpoint.py`
 records tasks as commit trailers, detection advances on those trailers alone,
-deleting `loop.json` costs nothing, and `loop.sh` stops on both terminals.
+deleting `loop.json` re-bootstraps without re-dispatching a finished task, and
+`loop.sh` stops on both terminals.
 
 The sibling validators are the real ones - `validate_tasks.py` gates the
 bootstrap, `check_commit.py` gates every message, `validate_state.py` decides

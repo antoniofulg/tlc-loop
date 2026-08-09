@@ -95,7 +95,7 @@ contract, not an implementation detail.
    failing to parse exits 1.
 3. **Halt check** → `phase=H`. See the precedence below.
 4. **Derive what is done.** `git log --reverse --format="%(trailers:key=Task,valueonly)"`,
-   deduped, unioned with `no_diff_tasks` from `loop.json`.
+   deduped, unioned with the legacy `no_diff_tasks` from `loop.json`.
 5. **Derive the plan.** Task ids and phases parsed from `tasks.md`. A missing
    `tasks.md` exits 1.
 6. **`pending = planned - done`.** Non-empty → `phase=B`, packing the pending
@@ -136,11 +136,13 @@ that survives several iterations is stored once. The reverse case is not a
 contradiction: an unticked header claims nothing, so a trailer without a tick
 just means the plan was never annotated.
 
-`no_diff_tasks` is not an exception to this rule. It is the one piece of
-completion state git cannot express: a config-only or docs-only task that
-legitimately produced no commit, and therefore no trailer. Without the union
-such a task would be re-dispatched forever. It is additive only, and it can
-never mark a task incomplete that git says is complete.
+`no_diff_tasks` is not an exception to this rule, and it is not the mechanism
+either. A config-only or docs-only task that changes nothing is committed with
+`--allow-empty`, so it carries the same `Task:` and `Gate:` trailers as every
+other task and git answers for it alone. The union is legacy: it exists so a
+run already in flight when that changed keeps the entries it had written. It is
+additive only, and it can never mark a task incomplete that git says is
+complete.
 
 A duplicate `Task:` trailer, which a rebase or cherry-pick can leave behind,
 counts once. The duplication is reported rather than dropped: `_gitio` hands
@@ -225,7 +227,7 @@ What has to become true before detection stops returning the same line.
 | Phase | Leaves when |
 | --- | --- |
 | `0` | `init_loop.py` has written `loop.json`. The next detect re-derives from git, so bootstrap never decides what to work on. |
-| `B` | Every task in the batch carries a `Task:` trailer, or is recorded in `no_diff_tasks`. The batch is not "done" because a worker said so; it is done because the trailers exist. |
+| `B` | Every task in the batch carries a `Task:` trailer. The batch is not "done" because a worker said so; it is done because the trailers exist - and a task that changed nothing has one too, on an empty commit. |
 | `V` | A verdict is recorded: `PASS` closes the feature, `FAIL` with open gaps moves to `F`. |
 | `F` | The gaps are consumed (`gaps_open` back to 0), which returns detection to `V` for a fresh round. |
 | `E` | Terminal. Nothing follows. Print the done-signature and stop. |
