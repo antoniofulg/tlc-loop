@@ -19,7 +19,7 @@ Usage:
 
 Output vocabulary (exactly one of these, on stdout):
     phase=0 action=bootstrap
-    phase=B action=execute_batch batch=P1+P2 tasks=T1,T2,T3
+    phase=B action=execute_batch batch=P1+P2 tasks=T1,T2,T3 stage=implement
     phase=V action=verify round=N
     phase=F action=fix round=N
     phase=E action=done
@@ -51,6 +51,7 @@ import _batching  # noqa: E402
 import _config  # noqa: E402
 import _gitio  # noqa: E402
 import _paths  # noqa: E402
+import _routing  # noqa: E402
 import _state_io  # noqa: E402
 import _tasksmd  # noqa: E402
 
@@ -194,7 +195,19 @@ def main(argv=None):
     if not os.path.isfile(tasks_path):
         print(f"detect_phase: no tasks.md at {tasks_path}", file=sys.stderr)
         return 1
-    planned = _tasksmd.parse(tasks_path)
+    try:
+        planned = _tasksmd.parse(tasks_path)
+        routed_phases = _routing.resolve(_tasksmd.parse_phases(tasks_path), config)
+    except _tasksmd.TasksFormatError as exc:
+        print(f"detect_phase: {exc}", file=sys.stderr)
+        return 1
+    except _routing.RoutingError as exc:
+        for error in exc.errors:
+            print(f"detect_phase: {error}", file=sys.stderr)
+        return 1
+    stage_by_phase = {
+        phase["number"]: phase["effective_stage"] for phase in routed_phases
+    }
 
     # 4b. Where the plan and git disagree, git wins - and says so out loud.
     #     A human tick on a task header claims completion; a missing `Task:`
@@ -219,14 +232,21 @@ def main(argv=None):
         notes.append(f"dup={','.join(duplicates)}")
 
     # 5. Work remains: name the next batch and the exact tasks in it.
-    pending = [task for task in planned if task["id"] not in done]
+    pending = [
+        {
+            **task,
+            "effective_stage": stage_by_phase.get(task["phase"], "implement"),
+        }
+        for task in planned
+        if task["id"] not in done
+    ]
     if pending:
         batches, _oversized = _batching.pack(pending, config["execute"]["batch_size"])
         batch = batches[0]
         label = "+".join(f"P{phase}" for phase in batch["phases"])
         core = (
             f"phase=B action=execute_batch batch={label} "
-            f"tasks={','.join(batch['tasks'])}"
+            f"tasks={','.join(batch['tasks'])} stage={batch['stage']}"
         )
         print(_line(core, notes))
         return 0

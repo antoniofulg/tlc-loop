@@ -185,6 +185,10 @@ class DetectPhaseCase(unittest.TestCase):
         with open(os.path.join(specs, "loop.config.toml"), "w", encoding="utf-8") as fh:
             fh.write(text)
 
+    def write_tasks(self, text):
+        with open(os.path.join(self.feature_dir, "tasks.md"), "w", encoding="utf-8") as fh:
+            fh.write(text)
+
     def write_validation(self, text):
         with open(os.path.join(self.feature_dir, "validation.md"), "w", encoding="utf-8") as fh:
             fh.write(text)
@@ -237,7 +241,10 @@ class AbsentState(DetectPhaseCase):
         self.write_state()
         self.complete("T1", "T2", "T3")
         before = self.line()
-        self.assertEqual(before, "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6")
+        self.assertEqual(
+            before,
+            "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6 stage=implement",
+        )
 
         os.unlink(self.state_path())
         self.assertEqual(self.line(), "phase=0 action=bootstrap")
@@ -253,7 +260,10 @@ class AbsentState(DetectPhaseCase):
         self.complete("T1", "T2")
         self.complete_without_diff("T3")
         before = self.line()
-        self.assertEqual(before, "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6")
+        self.assertEqual(
+            before,
+            "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6 stage=implement",
+        )
 
         os.unlink(self.state_path())
         self.assertEqual(self.line(), "phase=0 action=bootstrap")
@@ -263,25 +273,66 @@ class AbsentState(DetectPhaseCase):
 
 
 class ExecuteBatch(DetectPhaseCase):
+    def test_explicit_stages_split_batches_and_reach_the_detect_line(self):
+        self.write_state()
+        self.write_config(
+            "[stages.backend]\nprovider = 'auto'\n"
+            "[stages.frontend]\nprovider = 'auto'\n"
+        )
+        self.write_tasks(
+            TASKS_MD.replace(
+                "### Phase 1: Foundation\n",
+                "### Phase 1: Foundation\n\n**Stage:** backend\n",
+            ).replace(
+                "### Phase 2: Detection\n",
+                "### Phase 2: Detection\n\n**Stage:** frontend\n",
+            )
+        )
+        self.assertEqual(
+            self.line(),
+            "phase=B action=execute_batch batch=P1 tasks=T1,T2,T3 stage=backend",
+        )
+        self.complete("T1", "T2", "T3")
+        self.assertEqual(
+            self.line(),
+            "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6 stage=frontend",
+        )
+
+    def test_invalid_route_exits_before_naming_a_batch(self):
+        self.write_state()
+        self.write_tasks(
+            TASKS_MD.replace(
+                "### Phase 1: Foundation\n",
+                "### Phase 1: Foundation\n\n**Stage:** backned\n",
+            )
+        )
+        proc = self.detect()
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(proc.stdout, "")
+        self.assertIn("backned", proc.stderr)
+
     def test_pending_tasks_print_the_packed_batch_and_explicit_ids(self):
         self.write_state()
         self.assertEqual(
             self.line(),
-            "phase=B action=execute_batch batch=P1+P2 tasks=T1,T2,T3,T4,T5,T6",
+            "phase=B action=execute_batch batch=P1+P2 "
+            "tasks=T1,T2,T3,T4,T5,T6 stage=implement",
         )
 
     def test_the_batch_honours_the_configured_batch_size(self):
         self.write_state()
         self.write_config("[execute]\nbatch_size = 2\n")
         self.assertEqual(
-            self.line(), "phase=B action=execute_batch batch=P1 tasks=T1,T2,T3"
+            self.line(),
+            "phase=B action=execute_batch batch=P1 tasks=T1,T2,T3 stage=implement",
         )
 
     def test_completed_tasks_come_from_git_trailers(self):
         self.write_state()
         self.complete("T1", "T2", "T3")
         self.assertEqual(
-            self.line(), "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6"
+            self.line(),
+            "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6 stage=implement",
         )
 
     def test_a_legacy_no_diff_entry_is_still_unioned_with_the_git_trailers(self):
@@ -289,14 +340,18 @@ class ExecuteBatch(DetectPhaseCase):
         # that landed has entries in it. They must still count as done.
         self.write_state(no_diff_tasks=["T4"])
         self.complete("T1", "T2", "T3")
-        self.assertEqual(self.line(), "phase=B action=execute_batch batch=P2 tasks=T5,T6")
+        self.assertEqual(
+            self.line(),
+            "phase=B action=execute_batch batch=P2 tasks=T5,T6 stage=implement",
+        )
 
     def test_a_task_committed_empty_counts_as_done(self):
         self.complete("T1", "T2")
         self.complete_without_diff("T3")
         self.write_state()
         self.assertEqual(
-            self.line(), "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6"
+            self.line(),
+            "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6 stage=implement",
         )
 
     def test_git_wins_over_conflicting_state(self):
@@ -305,7 +360,8 @@ class ExecuteBatch(DetectPhaseCase):
         self.write_state(current_task="T1", current_batch=["T1", "T2", "T3"])
         self.complete("T1", "T2", "T3")
         self.assertEqual(
-            self.line(), "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6"
+            self.line(),
+            "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6 stage=implement",
         )
 
 
@@ -335,7 +391,7 @@ class Reconciliation(DetectPhaseCase):
         self.assertEqual(
             self.line(),
             "phase=B action=execute_batch batch=P1+P2 "
-            "tasks=T1,T2,T3,T4,T5,T6 reconciled=T1",
+            "tasks=T1,T2,T3,T4,T5,T6 stage=implement reconciled=T1",
         )
 
     def test_every_disagreeing_task_is_named(self):
@@ -354,14 +410,17 @@ class Reconciliation(DetectPhaseCase):
         self.tick("T1")
         self.complete("T1")
         self.assertEqual(
-            self.line(), "phase=B action=execute_batch batch=P1+P2 tasks=T2,T3,T4,T5,T6"
+            self.line(),
+            "phase=B action=execute_batch batch=P1+P2 "
+            "tasks=T2,T3,T4,T5,T6 stage=implement",
         )
 
     def test_an_unticked_plan_surfaces_nothing(self):
         self.write_state()
         self.complete("T1", "T2", "T3")
         self.assertEqual(
-            self.line(), "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6"
+            self.line(),
+            "phase=B action=execute_batch batch=P2 tasks=T4,T5,T6 stage=implement",
         )
 
     def test_a_legacy_no_diff_entry_is_not_a_disagreement(self):
@@ -413,7 +472,8 @@ class DuplicateTrailer(DetectPhaseCase):
         self.duplicate("T1")
         self.assertEqual(
             self.line(),
-            "phase=B action=execute_batch batch=P1+P2 tasks=T2,T3,T4,T5,T6 dup=T1",
+            "phase=B action=execute_batch batch=P1+P2 "
+            "tasks=T2,T3,T4,T5,T6 stage=implement dup=T1",
         )
 
     def test_every_duplicated_task_is_named(self):
@@ -474,7 +534,7 @@ class DuplicateTrailer(DetectPhaseCase):
         self.assertEqual(
             self.line(),
             "phase=B action=execute_batch batch=P1+P2 "
-            "tasks=T2,T3,T4,T5,T6 reconciled=T2 dup=T1",
+            "tasks=T2,T3,T4,T5,T6 stage=implement reconciled=T2 dup=T1",
         )
 
 
@@ -564,7 +624,10 @@ class VerifyCeiling(DetectPhaseCase):
             fh.write("\n### T7: Seven\n**Tests**: unit\n**Gate**: quick\n")
         self.write_state(verify={"rounds": 3, "last_verdict": "FAIL", "gaps_open": 2})
         self.write_config("[verify]\nmax_rounds = 3\n")
-        self.assertEqual(self.line(), "phase=B action=execute_batch batch=P2 tasks=T7")
+        self.assertEqual(
+            self.line(),
+            "phase=B action=execute_batch batch=P2 tasks=T7 stage=implement",
+        )
 
 
 class Done(DetectPhaseCase):

@@ -28,6 +28,13 @@ def _tasks(sizes):
     return out
 
 
+def _routed_tasks(sizes, stages):
+    tasks = _tasks(sizes)
+    for task in tasks:
+        task["effective_stage"] = stages[task["phase"] - 1]
+    return tasks
+
+
 class PhaseIntegrity(unittest.TestCase):
     """Rule 4 - the cut only ever lands on a phase boundary."""
 
@@ -122,6 +129,39 @@ class TailFolding(unittest.TestCase):
         batches, _ = _batching.pack(_tasks([2]), 7)
         self.assertEqual(len(batches), 1)
         self.assertEqual(batches[0]["phases"], [1])
+
+
+class StageHomogeneity(unittest.TestCase):
+    def test_different_effective_stages_never_share_a_batch(self):
+        batches, _ = _batching.pack(
+            _routed_tasks([3, 3], ["backend", "frontend"]), 7
+        )
+        self.assertEqual(
+            [(batch["stage"], batch["phases"]) for batch in batches],
+            [("backend", [1]), ("frontend", [2])],
+        )
+
+    def test_same_effective_stage_packs_normally(self):
+        batches, _ = _batching.pack(
+            _routed_tasks([3, 3], ["backend", "backend"]), 7
+        )
+        self.assertEqual(len(batches), 1)
+        self.assertEqual(batches[0]["phases"], [1, 2])
+        self.assertEqual(batches[0]["stage"], "backend")
+
+    def test_small_tail_is_not_folded_across_stage_boundary(self):
+        batches, _ = _batching.pack(
+            _routed_tasks([7, 2], ["backend", "docs"]), 7
+        )
+        self.assertEqual(
+            [(batch["stage"], len(batch["tasks"])) for batch in batches],
+            [("backend", 7), ("docs", 2)],
+        )
+
+    def test_legacy_tasks_default_to_implement_without_changing_batches(self):
+        batches, _ = _batching.pack(_tasks([3, 3, 3, 3, 4, 4]), 7)
+        self.assertEqual([len(batch["tasks"]) for batch in batches], [9, 7, 4])
+        self.assertEqual([batch["stage"] for batch in batches], ["implement"] * 3)
 
 
 class OversizedPhase(unittest.TestCase):
