@@ -186,6 +186,94 @@ class MissingOptionalField(unittest.TestCase):
         self.assertIsNone(_tasksmd.parse(path)[0]["phase"])
 
 
+class PhaseRecords(unittest.TestCase):
+    """Stage-routing contract: phases are ordered records, not a lossy number map."""
+
+    def parse(self, text):
+        path = _write(text)
+        self.addCleanup(os.unlink, path)
+        return _tasksmd.parse_phases(path)
+
+    def test_returns_ordered_titles_stages_and_tasks(self):
+        phases = self.parse(
+            "### Phase 1: Shared setup\n\n"
+            "**Stage:** foundation\n\n"
+            f"{FENCE}\nT1\n{FENCE}\n\n"
+            "### Phase 2: API\n\n"
+            "**Stage:** backend\n\n"
+            f"{FENCE}\nT2 -> T3\n{FENCE}\n\n"
+            "## Task Breakdown\n\n"
+            "### T1: Setup\n**Tests**: unit\n**Gate**: quick\n\n"
+            "### T2: Endpoint\n**Tests**: unit\n**Gate**: quick\n\n"
+            "### T3: Service\n**Tests**: unit\n**Gate**: quick\n"
+        )
+        self.assertEqual(
+            phases,
+            [
+                {
+                    "number": 1,
+                    "title": "Shared setup",
+                    "declared_stage": "foundation",
+                    "tasks": ["T1"],
+                },
+                {
+                    "number": 2,
+                    "title": "API",
+                    "declared_stage": "backend",
+                    "tasks": ["T2", "T3"],
+                },
+            ],
+        )
+
+    def test_stage_is_optional_for_legacy_tasks(self):
+        phase = self.parse(
+            "### Phase 1: Legacy\n\n"
+            f"{FENCE}\nT1\n{FENCE}\n\n"
+            "### T1: Work\n**Tests**: unit\n**Gate**: quick\n"
+        )[0]
+        self.assertIsNone(phase["declared_stage"])
+
+    def test_nested_task_layout_keeps_phase_membership(self):
+        phases = self.parse(
+            "### Phase 1: Backend\n\n"
+            "**Stage:** backend\n\n"
+            "#### T1: Endpoint\n**Tests**: unit\n**Gate**: quick\n\n"
+            "### Phase 2: Frontend\n\n"
+            "**Stage:** frontend\n\n"
+            "#### T2: Screen\n**Tests**: unit\n**Gate**: quick\n"
+        )
+        self.assertEqual([p["tasks"] for p in phases], [["T1"], ["T2"]])
+
+    def test_rejects_stage_after_phase_content(self):
+        with self.assertRaisesRegex(_tasksmd.TasksFormatError, "first non-empty line"):
+            self.parse(
+                "### Phase 1: Backend\n\n"
+                "Build the API first.\n\n"
+                "**Stage:** backend\n\n"
+                "#### T1: Endpoint\n**Tests**: unit\n**Gate**: quick\n"
+            )
+
+    def test_rejects_duplicate_stage_fields(self):
+        with self.assertRaisesRegex(_tasksmd.TasksFormatError, "duplicate Stage"):
+            self.parse(
+                "### Phase 1: Backend\n"
+                "**Stage:** backend\n"
+                "**Stage:** frontend\n"
+                "#### T1: Endpoint\n**Tests**: unit\n**Gate**: quick\n"
+            )
+
+    def test_rejects_letter_suffixed_phase_numbers(self):
+        with self.assertRaisesRegex(_tasksmd.TasksFormatError, "integer phase number"):
+            self.parse("### Phase 2a: Backend\n**Stage:** backend\n")
+
+    def test_rejects_duplicate_phase_numbers(self):
+        with self.assertRaisesRegex(_tasksmd.TasksFormatError, "duplicate Phase 2"):
+            self.parse(
+                "### Phase 2: Backend\n**Stage:** backend\n"
+                "### Phase 2: Frontend\n**Stage:** frontend\n"
+            )
+
+
 class CompletionTick(unittest.TestCase):
     """T31 / LOOP-01 AC 5: the human tick is read so git can contradict it.
 

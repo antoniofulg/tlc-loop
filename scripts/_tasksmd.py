@@ -28,13 +28,97 @@ Imported, never invoked directly.
 import re
 
 TASK_RE = re.compile(r"^#{2,4}\s+(T\d+)\s*:", re.IGNORECASE)
-PHASE_RE = re.compile(r"^#{2,4}\s+Phase\s+(\d+)", re.IGNORECASE)
+PHASE_PREFIX_RE = re.compile(r"^#{2,4}\s+Phase\b", re.IGNORECASE)
+PHASE_RE = re.compile(
+    r"^#{2,4}\s+Phase\s+([1-9]\d*)\s*:\s*(\S(?:.*\S)?)\s*$",
+    re.IGNORECASE,
+)
+HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
+STAGE_RE = re.compile(
+    r"^(?:\*{0,2}Stage:\*{0,2}|\*{0,2}Stage\*{0,2}\s*:)\s*(.*?)\s*$",
+    re.IGNORECASE,
+)
 TASK_ID_RE = re.compile(r"\bT\d+\b", re.IGNORECASE)
 DEPENDS_RE = re.compile(r"^\*{0,2}Depends on\*{0,2}\s*:\s*(.*)$", re.IGNORECASE)
 TESTS_RE = re.compile(r"^\*{0,2}Tests\*{0,2}\s*:\s*(.*)$", re.IGNORECASE)
 GATE_RE = re.compile(r"^\*{0,2}Gate\*{0,2}\s*:\s*(.*)$", re.IGNORECASE)
 #: The completion tick a human leaves on a finished task's header.
 DONE_MARK_RE = re.compile(r"✅\s*$")
+
+
+class TasksFormatError(Exception):
+    """`tasks.md` contains an ambiguous phase or Stage declaration."""
+
+
+def _phase_definitions(lines):
+    """Return ordered phase metadata and reject ambiguous phase declarations."""
+    phases = []
+    seen_numbers = set()
+    current = None
+    in_fence = False
+
+    for line_number, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+
+        if PHASE_PREFIX_RE.match(stripped):
+            match = PHASE_RE.match(stripped)
+            if not match:
+                raise TasksFormatError(
+                    f"line {line_number}: expected an integer phase number and title "
+                    f"in `### Phase N: Title`, got {stripped!r}"
+                )
+            number = int(match.group(1))
+            if number in seen_numbers:
+                raise TasksFormatError(f"line {line_number}: duplicate Phase {number}")
+            seen_numbers.add(number)
+            current = {
+                "number": number,
+                "title": match.group(2),
+                "declared_stage": None,
+                "tasks": [],
+                "_level": len(stripped) - len(stripped.lstrip("#")),
+                "_stage_seen": False,
+                "_stage_allowed": True,
+            }
+            phases.append(current)
+            continue
+
+        if current is None or not stripped:
+            continue
+
+        heading = HEADING_RE.match(stripped)
+        task_header = TASK_RE.match(stripped)
+        if heading and not task_header and len(heading.group(1)) <= current["_level"]:
+            current = None
+            continue
+
+        stage = STAGE_RE.match(stripped)
+        if stage:
+            if current["_stage_seen"]:
+                raise TasksFormatError(
+                    f"line {line_number}: duplicate Stage for Phase {current['number']}"
+                )
+            if not current["_stage_allowed"]:
+                raise TasksFormatError(
+                    f"line {line_number}: Stage must be the first non-empty line "
+                    f"after Phase {current['number']}"
+                )
+            current["declared_stage"] = stage.group(1)
+            current["_stage_seen"] = True
+            current["_stage_allowed"] = False
+            continue
+
+        current["_stage_allowed"] = False
+
+    for phase in phases:
+        for private in ("_level", "_stage_seen", "_stage_allowed"):
+            phase.pop(private)
+    return phases
 
 
 def _phase_membership(lines):
@@ -117,3 +201,23 @@ def parse(path):
         if gate:
             current["gate"] = gate.group(1).strip()
     return tasks
+
+
+def parse_phases(path):
+    """Return ordered phase records with title, declared Stage, and task ids.
+
+    Phase numbers must be positive integers and unique. `Stage`, when present,
+    is the first non-empty line after its phase heading. Task membership follows
+    the same diagram-or-nested-header rules as :func:`parse`.
+    """
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        lines = handle.read().splitlines()
+
+    phases = _phase_definitions(lines)
+    membership = _phase_membership(lines)
+    by_number = {phase["number"]: phase for phase in phases}
+    for task in parse(path):
+        phase = by_number.get(membership.get(task["id"]))
+        if phase is not None:
+            phase["tasks"].append(task["id"])
+    return phases
