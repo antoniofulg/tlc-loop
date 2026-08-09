@@ -363,7 +363,7 @@ session, **[?]** where inferred and pending the discovery task (T-discovery).
 
 | provider | kind | invocation | effort mechanism | evidence capture |
 | --- | --- | --- | --- | --- |
-| `claude` | `agent` when orchestrator is Claude Code, else `command` | `claude -p --model {model} --permission-mode {perm} --output-format stream-json` **[v]** | separate field **[v]** | stdout (stream-json) |
+| `claude` | `agent` when orchestrator is Claude Code, else `command` | `claude -p {prompt} --dangerously-skip-permissions --model {model} --effort {effort} --output-format stream-json` **[v]** | separate field **[v]** | stdout (stream-json) |
 | `codex` | `command` | `codex exec -m {model} -c model_reasoning_effort={effort} --cd {repo} -o {evidence}` **[v]** | `-c model_reasoning_effort` **[v]** | `-o/--output-last-message` file **[v]** |
 | `cursor` | `command` | `cursor-agent -p --force --model {model}{-effort} --output-format json` **[v]** | baked into the model name, or bracket syntax `'model[effort=high]'` **[v]** | stdout (json) |
 
@@ -376,6 +376,13 @@ Accepted `effort` values per provider:
 | `cursor` | `low, medium, high, xhigh` **[v]** (from `--list-models` suffixes) |
 
 `ultra` is accepted by none and is rejected by `resolve_stage.py --validate`.
+
+**Superseded during execution (T44).** The table above originally showed a
+`{perm}` placeholder that was never substituted, and no bypass argument for
+codex - which left a dispatched executor waiting on an approval prompt with
+nobody to answer it. Every command provider now carries its own bypass, read
+off that CLI's `--help`, and the skill no longer depends on the operator's
+global configuration to run unattended.
 
 ---
 
