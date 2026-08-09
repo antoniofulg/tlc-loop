@@ -1529,7 +1529,7 @@ T30
 
 ---
 
-### T46: Test cleanup that survives a SIGTERM-immune probe
+### T46: Test cleanup that survives a SIGTERM-immune probe ✅
 
 **What**: Make the spawner tests reap probes built to ignore `SIGTERM`, which currently leak.
 **Where**: `scripts/test_unit_spawn.py`
@@ -1544,9 +1544,9 @@ T30
 
 **Done when**:
 
-- [ ] Cleanup escalates past `SIGTERM`, so a probe written to ignore it is still reaped
-- [ ] A run of the suite leaves no probe process behind, asserted rather than assumed
-- [ ] The comment describing the cleanup matches what it does
+- [x] Cleanup escalates past `SIGTERM`, so a probe written to ignore it is still reaped
+- [x] A run of the suite leaves no probe process behind, asserted rather than assumed
+- [x] The comment describing the cleanup matches what it does
 
 **Tests**: unit
 **Gate**: quick

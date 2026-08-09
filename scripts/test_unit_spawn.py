@@ -11,6 +11,11 @@ nothing. A timeout that returns while the process tree is still alive is the
 failure this file exists to catch, and it is invisible to an exit-code
 assertion alone.
 
+Cleanup then repeats that check as an assertion (T46). It has to escalate to
+`SIGKILL` to do it: one probe behaviour ignores `SIGTERM` deliberately, and it
+is the behaviour left running whenever the spawner is the thing that broke, so
+a polite `pkill` reaps only the processes that were never the problem.
+
 The terminal case runs the spawner under a real pty (`pty.fork`, which makes the
 child a session leader with the slave as its controlling terminal). That is the
 environment a user runs `loop.sh` in and the only one in which the previous bash
@@ -32,6 +37,9 @@ import unittest
 
 SCRIPTS = os.path.dirname(os.path.realpath(__file__))
 SPAWN = os.path.join(SCRIPTS, "_spawn.py")
+
+#: How long `reap` waits for each signal to land before escalating or giving up.
+REAP_GRACE = 3.0
 
 #: One probe, several behaviours, and its token sits in argv so `pgrep -f` can
 #: find every process of the tree that outlived a kill.
@@ -56,6 +64,33 @@ time.sleep(600)
 '''
 
 
+def matching(pattern):
+    """Pids whose argv contains `pattern`, as `pgrep -f` prints them."""
+    found = subprocess.run(["pgrep", "-f", pattern], capture_output=True, text=True)
+    return found.stdout.strip()
+
+
+def reap(pattern, grace=REAP_GRACE):
+    """Kill everything matching `pattern`, escalating past `SIGTERM`.
+
+    Returns whatever is still alive at the end, so the caller can assert on it.
+
+    `pkill` alone sends `SIGTERM`, and one probe behaviour ignores `SIGTERM` on
+    purpose - which is exactly the behaviour left running when the spawner is
+    broken. So the polite signal reaped only the processes that were never the
+    problem: eleven `sleep 600` probes survived a sensor run and needed
+    `pkill -9` by hand. `SIGKILL` cannot be ignored, so the escalation ends.
+    """
+    for escalation in ([], ["-9"]):
+        subprocess.run(["pkill", *escalation, "-f", pattern], capture_output=True)
+        deadline = time.monotonic() + grace / 2
+        while time.monotonic() < deadline:
+            if not matching(pattern):
+                return ""
+            time.sleep(0.1)
+    return matching(pattern)
+
+
 class SpawnTestCase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -69,11 +104,20 @@ class SpawnTestCase(unittest.TestCase):
     def token(self, name):
         """A token unique to this test, carried in the probe's own argv."""
         unique = "%s-%s" % (self._token, name)
-        # Even a failing test must not leave a `sleep 600` behind.
-        self.addCleanup(
-            subprocess.run, ["pkill", "-f", unique], capture_output=True
-        )
+        # Even a failing test must not leave a `sleep 600` behind - which is
+        # when it matters, because a spawner that works leaves nothing to reap.
+        # So cleanup escalates to `SIGKILL` and then *asserts* the tree is gone
+        # rather than assuming the signal was enough.
+        self.addCleanup(self.assert_reaped, unique)
         return unique
+
+    def assert_reaped(self, pattern):
+        survivors = reap(pattern)
+        self.assertEqual(
+            survivors,
+            "",
+            "probe processes survived cleanup and are still running: %s" % survivors,
+        )
 
     def command(self, token, *args):
         return " ".join([sys.executable, self.probe, token, *args])
@@ -90,10 +134,7 @@ class SpawnTestCase(unittest.TestCase):
     def survivors(self, token):
         """Processes still matching `token`, after a moment for the kill to land."""
         time.sleep(0.5)
-        found = subprocess.run(
-            ["pgrep", "-f", token], capture_output=True, text=True
-        )
-        return found.stdout.strip()
+        return matching(token)
 
 
 class TestUnderTheBound(SpawnTestCase):
