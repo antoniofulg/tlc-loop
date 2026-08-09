@@ -87,6 +87,20 @@ class CodexCommandLine(ResolveCase):
         self.assertIn("-o /tmp/e.txt", line)
 
 
+class DomainStage(ResolveCase):
+    def test_a_configured_domain_stage_resolves_by_its_exact_name(self):
+        self.write_config(
+            '[stages.backend]\nprovider = "codex"\n'
+            'model = "gpt-backend"\neffort = "high"\n'
+        )
+        line = self.resolve_cmd(
+            "--stage", "backend", "--prompt", "build api",
+            "--evidence", "/tmp/backend.txt", harness="claude",
+        )
+        self.assertIn("kind=command provider=codex", line)
+        self.assertIn("-m gpt-backend", line)
+
+
 class CursorCommandLine(ResolveCase):
     def test_effort_is_baked_into_the_model_with_bracket_syntax(self):
         self.write_config(

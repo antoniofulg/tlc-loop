@@ -44,6 +44,24 @@ sys.exit(0)
 '''
 
 TASKS_MD = "# demo Tasks\n\n### T1: One\n**Tests**: unit\n**Gate**: quick\n"
+ROUTED_TASKS_MD = """# demo Tasks
+
+### Phase 1: Shared foundation
+
+**Stage:** foundation
+
+### T1: One
+**Tests**: unit
+**Gate**: quick
+
+### Phase 2: Backend API
+
+**Stage:** backend
+
+### T2: Two
+**Tests**: unit
+**Gate**: quick
+"""
 OBJECTIVE = "ship demo end to end"
 
 
@@ -236,6 +254,81 @@ class SuccessfulBootstrap(InitLoopCase):
 
     def test_an_absent_config_bootstraps_on_defaults(self):
         self.assertEqual(self.run_init().returncode, 0)
+
+
+class RoutingGate(InitLoopCase):
+    def test_valid_routes_are_printed_with_effective_provider_and_model(self):
+        self.write_tasks(ROUTED_TASKS_MD)
+        self.write_config(
+            '[stages.foundation]\nprovider = "codex"\nmodel = "gpt-foundation"\n'
+            '[stages.backend]\nprovider = "auto"\nmodel = "api-model"\n'
+        )
+        proc = self.run_init(harness="claude")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("route:\n", proc.stdout)
+        self.assertIn(
+            "Phase 1: Shared foundation -> foundation (codex/gpt-foundation)",
+            proc.stdout,
+        )
+        self.assertIn(
+            "Phase 2: Backend API -> backend (claude/api-model)", proc.stdout
+        )
+
+    def test_a_legacy_phase_without_stage_routes_to_implement(self):
+        self.write_tasks(
+            "# demo Tasks\n\n### Phase 1: Legacy\n\n"
+            "### T1: One\n**Tests**: unit\n**Gate**: quick\n"
+        )
+        proc = self.run_init(harness="claude")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("Phase 1: Legacy -> implement (claude/-)", proc.stdout)
+
+    def test_strict_routing_rejects_a_missing_stage_before_writing_state(self):
+        self.write_tasks(
+            "# demo Tasks\n\n### Phase 1: Missing route\n\n"
+            "### T1: One\n**Tests**: unit\n**Gate**: quick\n"
+        )
+        self.write_config("[execute]\nstrict_routing = true\n")
+        proc = self.run_init()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("Phase 1", proc.stderr)
+        self.assertIn("missing Stage", proc.stderr)
+        self.assertFalse(os.path.exists(self.state_path()))
+
+    def test_all_route_errors_are_named_and_no_state_is_written(self):
+        self.write_tasks(
+            """# demo Tasks
+
+### Phase 1: Missing route
+
+### T1: One
+**Tests**: unit
+**Gate**: quick
+
+### Phase 2: Reserved route
+
+**Stage:** verify
+
+### T2: Two
+**Tests**: unit
+**Gate**: quick
+
+### Phase 3: Unknown route
+
+**Stage:** backned
+
+### T3: Three
+**Tests**: unit
+**Gate**: quick
+"""
+        )
+        self.write_config("[execute]\nstrict_routing = true\n")
+        proc = self.run_init(harness=None)
+        self.assertEqual(proc.returncode, 1)
+        for phase in ("Phase 1", "Phase 2", "Phase 3"):
+            self.assertIn(phase, proc.stderr)
+        self.assertNotIn("cannot tell which harness", proc.stderr)
+        self.assertFalse(os.path.exists(self.state_path()))
 
 
 class ObjectiveIsVerbatim(InitLoopCase):

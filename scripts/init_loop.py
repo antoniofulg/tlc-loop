@@ -21,7 +21,8 @@ Preconditions, checked in this order and each naming itself on failure:
    checks belong here because both failures are silent otherwise: a future
    schema would be half-honoured, and a typo'd mode would pick the wrong way to
    restart a turn, which nobody notices until the run has been idle all night.
-5. The running harness resolves, or a provider was named explicitly.
+5. Every phase routes to a configured implementation stage.
+6. The running harness resolves, or a provider was named explicitly.
 
 **Harness detection asks rather than guesses** (LOOP-06 AC 4). Only markers
 verified by running inside the harness are listed in `HARNESS_MARKERS`; see
@@ -50,7 +51,9 @@ sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import _config  # noqa: E402
 import _gitio  # noqa: E402
 import _paths  # noqa: E402
+import _routing  # noqa: E402
 import _state_io  # noqa: E402
+import _tasksmd  # noqa: E402
 
 #: Environment markers that identify the harness a script is running inside.
 #: Verified by probing each CLI; a harness whose marker could not be confirmed
@@ -93,6 +96,22 @@ def resolve_harness(args, config):
     if configured and configured != "auto":
         return configured, "continue.respawn.provider in loop.config.toml"
     return detect_harness()
+
+
+def print_routes(routes, config, harness):
+    """Print the pre-execution phase map with effective provider and model."""
+    print("route:")
+    for route in routes:
+        stage = route["effective_stage"]
+        stage_config = config["stages"][stage]
+        provider = stage_config.get("provider")
+        if provider in (None, "", "auto"):
+            provider = harness
+        model = stage_config.get("model") or "-"
+        print(
+            f"  Phase {route['number']}: {route['title']} -> {stage} "
+            f"({provider}/{model})"
+        )
 
 
 def main(argv=None):
@@ -180,7 +199,20 @@ def main(argv=None):
         )
         return 1
 
-    # 5. The harness is known, or the user names it.
+    # 5. Every implementation phase has one valid effective route. This must
+    # happen before harness detection and before state exists: route errors are
+    # plan errors, and one inconclusive environment must not hide the others.
+    try:
+        routes = _routing.resolve(_tasksmd.parse_phases(tasks_path), config)
+    except _tasksmd.TasksFormatError as exc:
+        print(f"init_loop: {exc}", file=sys.stderr)
+        return 1
+    except _routing.RoutingError as exc:
+        for error in exc.errors:
+            print(f"init_loop: {error}", file=sys.stderr)
+        return 1
+
+    # 6. The harness is known, or the user names it.
     harness, how = resolve_harness(args, config)
     if harness is None:
         print(
@@ -190,6 +222,8 @@ def main(argv=None):
             file=sys.stderr,
         )
         return 2
+
+    print_routes(routes, config, harness)
 
     state = _state_io.new_state(args.feature, args.objective, harness)
     try:

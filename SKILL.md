@@ -189,12 +189,13 @@ Done when: `loop.json` exists and every configured stage resolves.
 
 #### Phase B - Execute one batch
 
-The detect line names the batch and its exact task ids. Use those ids. Never
-"the next few tasks".
+The detect line names the batch, its exact task ids, and `stage=<effective>`.
+Use those ids and that stage. Never "the next few tasks", and never infer a
+stage from a phase title.
 
 1. **Resolve the executor.**
    ```bash
-   python3 <skill-dir>/scripts/resolve_stage.py --stage implement --root <root> \
+   python3 <skill-dir>/scripts/resolve_stage.py --stage <stage-from-detect-line> --root <root> \
      --feature <feature> --prompt "<payload>" --evidence <file>
    ```
    `kind=agent` means dispatch through the harness' own sub-agent mechanism.
