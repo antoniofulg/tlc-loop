@@ -50,6 +50,10 @@ listed below.
 version = 1
 ```
 
+`1` is the only version this loop understands. `init_loop.py` refuses to
+bootstrap against any other, so a config written for a different schema stops
+the run before it starts rather than being half-honoured hours in.
+
 ---
 
 ## `[stages.*]`
@@ -132,8 +136,15 @@ max_rounds = 3
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `in_turn` | boolean | `true` | Whether the loop re-enters detection in the same turn instead of returning control to the user. |
 | `mode` | string | `"auto"` | How continuation is driven across turns: `auto`, `goal`, `shell`, or `none`. `auto` resolves from the running harness at bootstrap. |
+
+`mode` is checked at bootstrap: a value outside those four is refused, because a
+typo would silently pick the wrong way to restart a turn.
+
+There is no key for continuing *within* a turn. LOOP-06 AC 1 requires the loop
+to re-enter detection in the same turn while the phase is not terminal, so it
+is not configurable. Use `mode = "none"` to stop the run from restarting a turn
+once the current one ends.
 
 ### `[continue.respawn]`
 
@@ -148,7 +159,6 @@ defaults, same `effort` validation.
 
 ```toml
 [continue]
-in_turn = true
 mode = "auto"
 
 [continue.respawn]
@@ -168,13 +178,19 @@ table.
 | --- | --- | --- | --- |
 | `no_progress_iterations` | integer | *unlimited* | Halt after this many iterations with no new commit. |
 | `gate_attempts_per_task` | integer | *unlimited* | Halt when one task's gate has failed more than this many times. |
-| `executor_timeout_seconds` | integer | *unlimited* | Kill an executor invocation after this long. A timeout counts as an executor failure. |
+| `executor_timeout_seconds` | integer | *unlimited* | Kill an executor invocation after this long. A timeout counts as an executor failure: it is recorded as `phase=H reason=executor`, never retried. Emitted by `resolve_stage.py` as `timeout=<seconds>` and enforced by whoever spawns the process - `loop.sh` for the respawn, the agent for a dispatched stage. |
 | `max_iterations` | integer | *unlimited* | Halt cleanly once the run reaches this many iterations. |
 | `max_minutes` | integer | *unlimited* | Halt cleanly once the run has been going this long. |
 
-An unlimited run has no automatic stop. Set at least
-`no_progress_iterations` and `gate_attempts_per_task` before leaving a run
-unattended.
+Every value must be a positive integer. `0` and a negative number are refused
+at load rather than read as unlimited: omission already means unlimited, so a
+zero is a typo, and a ceiling of zero would halt on the first iteration.
+
+An unlimited run has no automatic stop. Before leaving a run unattended, set at
+least `no_progress_iterations`, `gate_attempts_per_task`, and
+`executor_timeout_seconds` - the first two catch a loop going nowhere, and the
+third catches the one failure that produces no output at all: a provider CLI
+that hangs.
 
 ```toml
 [limits]

@@ -6,7 +6,11 @@ different things to three different CLIs: Claude Code takes effort as its own
 flag, codex as a config override, cursor as part of the model id. This script
 is the translation layer, specified by `references/providers.md`.
 
-It resolves, it does not dispatch. Nothing here spawns a provider.
+It resolves, it does not dispatch. Nothing here spawns a provider - which is
+why `limits.executor_timeout_seconds` is *emitted* rather than applied. Whoever
+spawns the process owns the clock: `loop.sh` for the respawn it starts itself,
+and the agent for a stage it dispatches. The field rides the resolved line so
+neither has to go read the config to find it.
 
 Two rules it enforces before anything can be run:
 
@@ -27,6 +31,10 @@ Usage:
 Output, exactly one line:
     kind=agent provider=claude model=opus effort=high
     kind=command provider=codex cmd=<shell-quoted command line>
+
+`timeout=<seconds>` is appended, before `cmd=`, whenever
+`limits.executor_timeout_seconds` is set. An absent field means unlimited, the
+same convention omission carries everywhere under `[limits]` (D8).
 
 Exit codes: 0 resolved, 1 the config or state could not be read, 2 the
 configuration is unusable (unknown provider, unsupported effort, unfilled
@@ -121,6 +129,7 @@ def resolve_provider(stage, harness):
 
 def resolve(name, stage, config, harness, ctx):
     """Resolve one stage. Returns a dict; raises ResolveError when unusable."""
+    timeout = config["limits"]["executor_timeout_seconds"]
     provider = resolve_provider(stage, harness)
     if provider is None:
         raise ResolveError(
@@ -131,13 +140,16 @@ def resolve(name, stage, config, harness, ctx):
     model, effort = stage.get("model"), stage.get("effort")
     check_effort(provider, effort, name)
 
-    # The harness can delegate natively; no process is spawned.
+    # The harness can delegate natively; no process is spawned. The timeout
+    # still rides along: the agent owns the clock for a stage it dispatches.
     if provider == harness:
-        return {"kind": "agent", "provider": provider, "model": model, "effort": effort}
+        return {"kind": "agent", "provider": provider, "model": model,
+                "effort": effort, "timeout": timeout}
 
     custom = (config.get("providers") or {}).get(provider)
     if custom and custom.get("kind") == "agent":
-        return {"kind": "agent", "provider": provider, "model": model, "effort": effort}
+        return {"kind": "agent", "provider": provider, "model": model,
+                "effort": effort, "timeout": timeout}
 
     if custom and custom.get("command"):
         # `{model}` and `{effort}` are per-stage, so they join the context here
@@ -171,6 +183,7 @@ def resolve(name, stage, config, harness, ctx):
         "provider": provider,
         "model": model,
         "effort": effort,
+        "timeout": timeout,
         "argv": argv,
     }
 
@@ -210,12 +223,18 @@ def known_harness(args, root):
 
 
 def _render(result):
-    head = f"kind={result['kind']} provider={result['provider']}"
+    """One line. `timeout=` appears only when a limit is set (D8)."""
+    fields = [f"kind={result['kind']}", f"provider={result['provider']}"]
     if result["kind"] == "agent":
-        return (
-            f"{head} model={result['model'] or '-'} effort={result['effort'] or '-'}"
-        )
-    return f"{head} cmd={shlex.join(result['argv'])}"
+        fields.append(f"model={result['model'] or '-'}")
+        fields.append(f"effort={result['effort'] or '-'}")
+    if result["timeout"] is not None:
+        fields.append(f"timeout={result['timeout']}")
+    if result["kind"] == "command":
+        # Last, always: everything after ` cmd=` is the command line, which is
+        # how `loop.sh` splits it back out.
+        fields.append(f"cmd={shlex.join(result['argv'])}")
+    return " ".join(fields)
 
 
 def main(argv=None):

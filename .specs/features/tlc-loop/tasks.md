@@ -1316,7 +1316,7 @@ T30
 
 ---
 
-### T39: Enforce the limits the config only declares
+### T39: Enforce the limits the config only declares ✅
 
 **What**: Make `executor_timeout_seconds`, `continue.in_turn`, and `version` do something, or stop offering them.
 **Where**: `scripts/resolve_stage.py`
@@ -1331,12 +1331,20 @@ T30
 
 **Done when**:
 
-- [ ] `executor_timeout_seconds` reaches whoever spawns the process: emitted by `resolve_stage.py`, applied by `loop.sh` for the respawn it owns, and stated in `SKILL.md` as binding on a dispatched stage
-- [ ] Expiry is an executor failure with a recorded halt, not a hang
-- [ ] `continue.in_turn` is honoured where the continue gate is decided, or removed from the config, the schema, and `SKILL.md`
-- [ ] `version` is validated at load, or removed
-- [ ] A test asserts every key `_config` defaults is read somewhere, so the next declared-but-ignored key fails the gate instead of waiting for an audit
-- [ ] Unit tests cover the timeout emission and the `in_turn` decision
+- [x] `executor_timeout_seconds` reaches whoever spawns the process: emitted by `resolve_stage.py` as `timeout=<seconds>`, enforced by `loop.sh` for the respawn it owns, and binding on the agent per `SKILL.md`
+- [x] Expiry is an executor failure with a recorded halt, not a hang: `loop.sh` records `--halt executor` through `update_loop.py` and lets the next detect print the `phase=H` line, so there is no second stop contract
+- [x] `continue.in_turn` is removed from the config, the schema, the example, and `SKILL.md`. Nothing could honour it: LOOP-06 AC 1 requires in-turn re-entry, so the key only ever offered a way to violate the spec
+- [x] `version` is validated at bootstrap by `init_loop.py` against `_config.SUPPORTED_VERSIONS`
+- [x] A test asserts every key `_config` defaults is read somewhere - `test_unit_config.EveryDeclaredKeyHasAReader`, with a discrimination case that plants an unread key
+- [x] Unit tests cover the timeout emission (`test_unit_resolve_stage.ExecutorTimeout`) and the enforcement (`test_int_loop_sh.TestExecutorTimeout`)
+
+> Three additions the audit's own criteria forced. `continue.mode` was a fourth
+> unread key, so it is validated at bootstrap beside `version`. `[limits]`
+> values are checked for being positive integers, because a limit the loop
+> cannot compare against never fires and reads exactly like a hang. And
+> `timeout(1)` is absent on this machine, so `loop.sh` watchdogs the respawn
+> itself - killing the process *group*, then sweeping it with KILL, because
+> `wait` returns when the direct child dies and leaves an orphaned CLI running.
 
 **Tests**: unit
 **Gate**: quick

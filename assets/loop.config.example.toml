@@ -60,9 +60,11 @@ max_rounds = 3 # omitted -> unlimited. Spending it without a PASS halts with
 
 # --- Continuation -----------------------------------------------------------
 
+# Re-entering detection within a turn is not configurable: LOOP-06 AC 1
+# requires it. `mode` decides what restarts the turn once it ends, and a value
+# outside the four below is refused at bootstrap.
 [continue]
-in_turn = true # default: true. Re-enter detection in the same turn.
-mode = "auto"  # default: "auto". auto | goal | shell | none
+mode = "auto" # default: "auto". auto | goal | shell | none
 
 # The agent spawned to start the next turn, when continuation needs a new one.
 # Same three keys as a stage.
@@ -77,13 +79,17 @@ effort = "high"
 # TOML has no null, so there is no way to write "no limit" as a value.
 # An omitted key here means UNLIMITED. A limit applies only when written down.
 #
-# The two below are the runaway detectors. Set them before leaving a run
-# unattended: without them a broken loop spins all night looking healthy.
+# Every value must be a positive integer; 0 is refused rather than read as
+# unlimited. The three below are what an overnight run needs. Set them: without
+# the first two a broken loop spins all night looking healthy, and without the
+# third a hung provider CLI produces no output at all, which is indistinguishable
+# from slow work until somebody comes back and looks.
 
 [limits]
 no_progress_iterations = 3    # halt after 3 iterations with no new commit
 gate_attempts_per_task = 3    # halt when one task's gate has failed 3 times
-executor_timeout_seconds = 1800 # kill an executor after 30 minutes; a timeout is a failure
+executor_timeout_seconds = 1800 # kill an executor after 30 minutes and halt with
+                                # reason=executor; a timeout is a failure, not a retry
 
 # Both of these are commented out, so both are unlimited. That is the only way
 # to express it - there is no `max_iterations = null`.

@@ -337,18 +337,17 @@ batch_size = 7
 max_rounds = 3              # no hard ceiling (D5)
 
 [continue]
-in_turn = true
-mode = "auto"               # auto | goal | shell | none
+mode = "auto"               # auto | goal | shell | none; validated at bootstrap
 
 [continue.respawn]
 provider = "auto"           # detected at bootstrap; explicit always wins (D10)
 model = "opus"
 effort = "high"
 
-[limits]                    # omit a key for unlimited (D8)
+[limits]                    # omit a key for unlimited (D8); each is a positive integer
 no_progress_iterations = 3
 gate_attempts_per_task = 3
-executor_timeout_seconds = 1800
+executor_timeout_seconds = 1800   # emitted by resolve_stage.py, enforced by whoever spawns
 # max_iterations = 200
 # max_minutes = 480
 

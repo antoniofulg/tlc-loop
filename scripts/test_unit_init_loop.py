@@ -166,6 +166,57 @@ class Preconditions(InitLoopCase):
         self.assertFalse(os.path.exists(self.state_path()))
 
 
+class ConfigIsUnderstoodBeforeTheRunStarts(InitLoopCase):
+    """T39: `version` and `continue.mode` are checked here, or nowhere.
+
+    Both keys parse fine and mean nothing to the loop unless something compares
+    them. A future schema version would be half-honoured and a typo'd mode would
+    pick the wrong way to restart a turn - neither is visible until the run has
+    been idle for hours, which is exactly the failure bootstrap exists to catch.
+    """
+
+    def test_an_unsupported_schema_version_is_refused(self):
+        self.write_config("version = 2\n")
+        proc = self.run_init()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("version", proc.stderr)
+        self.assertFalse(os.path.exists(self.state_path()))
+
+    def test_the_refusal_names_the_versions_it_understands(self):
+        self.write_config("version = 99\n")
+        self.assertIn("supported: 1", self.run_init().stderr)
+
+    def test_the_supported_version_bootstraps(self):
+        self.write_config("version = 1\n")
+        self.assertEqual(self.run_init().returncode, 0)
+
+    def test_an_unknown_continue_mode_is_refused(self):
+        self.write_config('[continue]\nmode = "shel"\n')
+        proc = self.run_init()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("continue.mode", proc.stderr)
+        self.assertFalse(os.path.exists(self.state_path()))
+
+    def test_the_refusal_lists_the_accepted_modes(self):
+        self.write_config('[continue]\nmode = "shel"\n')
+        stderr = self.run_init().stderr
+        for accepted in ("auto", "goal", "shell", "none"):
+            self.assertIn(accepted, stderr)
+
+    def test_every_documented_mode_bootstraps(self):
+        for mode in ("auto", "goal", "shell", "none"):
+            with self.subTest(mode=mode):
+                self.setUp()
+                self.write_config(f'[continue]\nmode = "{mode}"\n')
+                self.assertEqual(self.run_init().returncode, 0, mode)
+
+    def test_a_limit_that_could_never_fire_is_refused(self):
+        self.write_config("[limits]\nexecutor_timeout_seconds = 0\n")
+        proc = self.run_init()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("executor_timeout_seconds", proc.stderr)
+
+
 class SuccessfulBootstrap(InitLoopCase):
     def test_it_exits_zero_and_writes_the_state_file(self):
         proc = self.run_init()

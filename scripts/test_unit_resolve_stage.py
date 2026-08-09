@@ -292,6 +292,52 @@ class PlaceholderSubstitution(ResolveCase):
         self.assertIn("{evidence}", proc.stderr)
 
 
+class ExecutorTimeout(ResolveCase):
+    """T39 / LOOP-06: the timeout reaches whoever spawns the process.
+
+    Nothing here spawns anything, so the resolver's whole job is to put
+    `limits.executor_timeout_seconds` on the line. Absent means unlimited, the
+    same convention omission carries under `[limits]` (D8).
+    """
+
+    def test_a_configured_timeout_rides_the_command_line(self):
+        self.write_config(
+            '[stages.implement]\nprovider = "codex"\n'
+            "\n[limits]\nexecutor_timeout_seconds = 1800\n"
+        )
+        line = self.resolve_cmd(
+            "--stage", "implement", "--prompt", "go", "--evidence", "/tmp/e.txt"
+        )
+        self.assertIn(" timeout=1800 ", line)
+
+    def test_it_comes_before_cmd_so_the_command_stays_the_line_tail(self):
+        self.write_config(
+            '[stages.implement]\nprovider = "codex"\n'
+            "\n[limits]\nexecutor_timeout_seconds = 90\n"
+        )
+        line = self.resolve_cmd(
+            "--stage", "implement", "--prompt", "go", "--evidence", "/tmp/e.txt"
+        )
+        self.assertLess(line.index(" timeout=90"), line.index(" cmd="))
+
+    def test_a_configured_timeout_rides_the_agent_line_too(self):
+        self.write_config(
+            '[stages.verify]\nprovider = "claude"\nmodel = "opus"\neffort = "high"\n'
+            "\n[limits]\nexecutor_timeout_seconds = 600\n"
+        )
+        line = self.resolve_cmd("--stage", "verify", harness="claude")
+        self.assertEqual(
+            line, "kind=agent provider=claude model=opus effort=high timeout=600"
+        )
+
+    def test_an_omitted_timeout_puts_no_field_on_the_line(self):
+        self.write_config('[stages.implement]\nprovider = "codex"\n')
+        line = self.resolve_cmd(
+            "--stage", "implement", "--prompt", "go", "--evidence", "/tmp/e.txt"
+        )
+        self.assertNotIn("timeout=", line)
+
+
 class Failures(ResolveCase):
     def test_an_unknown_stage_name_exits_non_zero(self):
         self.write_config('[stages.implement]\nprovider = "codex"\n')

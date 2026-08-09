@@ -9,7 +9,14 @@ with no hard-coded maximum (D5), so omitting it imposes none.
 Every absent key resolves to its documented default, which is why an absent
 file is a valid configuration rather than an error. An `effort` the loop knows
 no provider accepts is rejected here, at load time, so a bad pairing never
-reaches dispatch (LOOP-05 AC 2).
+reaches dispatch (LOOP-05 AC 2). A `[limits]` value that is not a positive
+integer is rejected for the same reason: a limit the loop cannot compare
+against is a limit that never fires, and a ceiling that never fires is
+indistinguishable from a hang.
+
+Every key this module defaults has a reader in a non-test script, and
+`test_unit_config.py` asserts it. A key that configures nothing is worse than
+an absent one: it reads as a promise.
 
 Imported, never invoked directly.
 """
@@ -19,6 +26,16 @@ import tomllib
 
 #: Effort values any provider accepts. `ultra` is deliberately absent.
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
+
+#: Schema versions this loop understands. Checked at bootstrap by
+#: `init_loop.py`, so a config written for a different schema is refused
+#: before a run starts rather than half-honoured hours in.
+SUPPORTED_VERSIONS = (1,)
+
+#: Values `continue.mode` accepts, from the continuation table in `SKILL.md`.
+#: Checked at bootstrap: a typo here silently picks the wrong way to restart a
+#: turn, which is the failure nobody sees until morning.
+CONTINUE_MODES = ("auto", "goal", "shell", "none")
 
 _STAGE_DEFAULT = {"provider": "auto", "model": None, "effort": None}
 
@@ -54,7 +71,7 @@ def defaults():
         # No hard-coded maximum (D5): the ceiling exists only when the user
         # sets one, exactly like a `[limits]` key.
         "verify": {"max_rounds": None},
-        "continue": {"in_turn": True, "mode": "auto", "respawn": dict(_STAGE_DEFAULT)},
+        "continue": {"mode": "auto", "respawn": dict(_STAGE_DEFAULT)},
         "limits": {key: None for key in LIMIT_KEYS},
         "providers": {},
     }
@@ -82,6 +99,24 @@ def _check_effort(cfg):
             )
 
 
+def _check_limits(cfg):
+    """Every `[limits]` value is a positive integer, or the key is absent.
+
+    `0` is rejected rather than read as "unlimited": omission already means
+    unlimited (D8), so a zero is a typo, and a ceiling of zero would halt the
+    run on its first iteration.
+    """
+    for key in LIMIT_KEYS:
+        value = cfg["limits"][key]
+        if value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ConfigError(
+                f"limits.{key}: expected a positive integer, got {value!r}; "
+                f"omit the key entirely to mean unlimited"
+            )
+
+
 def load_config(root):
     """Return the config for a project root, with every absent key defaulted."""
     cfg = defaults()
@@ -105,9 +140,8 @@ def load_config(root):
         cfg["verify"]["max_rounds"] = raw["verify"]["max_rounds"]
 
     cont = raw.get("continue") or {}
-    for key in ("in_turn", "mode"):
-        if key in cont:
-            cfg["continue"][key] = cont[key]
+    if "mode" in cont:
+        cfg["continue"]["mode"] = cont["mode"]
     cfg["continue"]["respawn"] = _merge_stage(
         cfg["continue"]["respawn"], cont.get("respawn") or {}
     )
@@ -119,4 +153,5 @@ def load_config(root):
     cfg["providers"] = raw.get("providers") or {}
 
     _check_effort(cfg)
+    _check_limits(cfg)
     return cfg

@@ -18,8 +18,17 @@
 # It never spins. A line it cannot parse, a detect that fails, a respawn it
 # cannot resolve, and a respawn that exits non-zero all stop the driver with
 # exit 2. Retrying any of them would hammer the same failure with no counter
-# advancing anywhere, because the counters live in `loop.json` and only the
-# agent writes them.
+# advancing anywhere, because the counters live in `loop.json` and only
+# `update_loop.py` writes them.
+#
+# The one clock it owns: when the resolved line carries `timeout=<seconds>`
+# (`limits.executor_timeout_seconds`), a respawn that outlives it is killed.
+# `timeout(1)` is not portable - it is absent on macOS without coreutils - so
+# the watchdog is a backgrounded subshell. An expiry is an executor failure,
+# not a retry condition: it is recorded through `update_loop.py --halt
+# executor`, and the next detect turns that into the `phase=H` line the driver
+# already knows how to stop on. A hung provider CLI is otherwise silence until
+# somebody comes back and looks.
 #
 # Usage:
 #     loop.sh <feature> [--root DIR]
@@ -33,6 +42,7 @@
 # Environment overrides, all optional:
 #     LOOP_DETECT_CMD   command that prints the phase line
 #     LOOP_RESOLVE_CMD  command that resolves a stage
+#     LOOP_UPDATE_CMD   command that records a halt in loop.json
 #     LOOP_PROMPT       payload text handed to the respawned agent
 #     LOOP_EVIDENCE     evidence file path; a temp file is used when unset
 #
@@ -45,11 +55,16 @@ self_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 
 : "${LOOP_DETECT_CMD:=python3 ${self_dir}/detect_phase.py}"
 : "${LOOP_RESOLVE_CMD:=python3 ${self_dir}/resolve_stage.py}"
+: "${LOOP_UPDATE_CMD:=python3 ${self_dir}/update_loop.py}"
 : "${LOOP_PROMPT:=}"
 : "${LOOP_EVIDENCE:=}"
 
 newline='
 '
+
+# What a killed respawn reports. 124 is the value timeout(1) uses for the same
+# event, kept so the number means the same thing to anyone reading a transcript.
+TIMED_OUT=124
 
 usage() {
     cat <<'EOF'
@@ -65,6 +80,73 @@ die() {
     shift
     printf 'loop.sh: %s\n' "$*" >&2
     exit "$code"
+}
+
+# Run a command string, killing it after $1 seconds. An empty $1 means
+# unlimited and runs it directly, which keeps the common path free of the
+# watchdog entirely. Returns the command's own status, or $TIMED_OUT.
+run_bounded() {
+    bounded_secs=$1
+    bounded_cmd=$2
+
+    if [ -z "$bounded_secs" ]; then
+        # The resolver emits a shell-quoted command line, so eval is how it is
+        # meant to be run. What it contains comes from the user's own config.
+        eval "$bounded_cmd"
+        return $?
+    fi
+
+    bounded_marker=$(mktemp "${TMPDIR:-/tmp}/tlc-loop-timeout-XXXXXX") || return 1
+
+    # Job control, so the respawn gets a process group of its own and the
+    # watchdog can signal the whole tree. `eval` is not a simple command, so
+    # bash runs it in a forked subshell and the provider CLI is that subshell's
+    # child: signalling the pid alone kills the wrapper and orphans the CLI,
+    # which then keeps running - and keeps holding the driver's stdout - which
+    # is the hang this exists to end. Restored immediately, so the watchdog
+    # below stays in the driver's own group and cannot be caught by its own kill.
+    set -m
+    eval "$bounded_cmd" &
+    bounded_pid=$!
+    set +m
+
+    # The marker is written before the kill, so the status the wait reports can
+    # be told apart from an ordinary non-zero exit. TERM is the polite ask, so
+    # a CLI that wants to flush its output can.
+    (
+        sleep "$bounded_secs"
+        printf 'timeout' >"$bounded_marker"
+        kill -TERM -"$bounded_pid" 2>/dev/null || kill -TERM "$bounded_pid" 2>/dev/null
+    ) &
+    bounded_watchdog=$!
+
+    wait "$bounded_pid"
+    bounded_status=$?
+
+    kill -TERM "$bounded_watchdog" 2>/dev/null
+    wait "$bounded_watchdog" 2>/dev/null
+
+    if [ -s "$bounded_marker" ]; then
+        # `wait` tracks only the direct child, and TERM is a request a process
+        # is free to ignore. Either way the wait can return while the provider
+        # CLI is still alive in the group, still burning quota and still
+        # holding the driver's stdout. KILL is not ignorable, so the sweep is
+        # what actually ends the hang - the escalation cannot be left to the
+        # watchdog, which has already been stopped by then.
+        kill -KILL -"$bounded_pid" 2>/dev/null
+        bounded_status=$TIMED_OUT
+    fi
+    rm -f "$bounded_marker"
+    return "$bounded_status"
+}
+
+# Record a halt through the single writer, then let detection report it. The
+# driver never prints a stop the vocabulary does not already cover.
+record_halt() {
+    printf 'loop.sh: recording halt reason=%s: %s\n' "$1" "$2" >&2
+    if ! $LOOP_UPDATE_CMD "$feature" --root "$root" --halt "$1" --detail "$2" >/dev/null; then
+        die 2 "could not record the $1 halt; stopping"
+    fi
 }
 
 feature=
@@ -142,6 +224,15 @@ while :; do
         die 2 "could not resolve continue.respawn; stopping"
     fi
 
+    # Absent means unlimited, the same as omitting the key (D8).
+    case $resolved in
+        *" timeout="*)
+            secs=${resolved#*" timeout="}
+            secs=${secs%% *}
+            ;;
+        *) secs= ;;
+    esac
+
     case $resolved in
         *" cmd="*) cmd=${resolved#*" cmd="} ;;
         *) die 2 "continue.respawn resolved to '${resolved}', which is nothing this driver can spawn; name a CLI in continue.respawn.provider" ;;
@@ -150,10 +241,14 @@ while :; do
 
     printf 'loop.sh: respawn %s\n' "$cmd" >&2
 
-    # The resolver emits a shell-quoted command line, so eval is how it is meant
-    # to be run. What it contains comes from the user's own loop.config.toml.
-    eval "$cmd"
+    run_bounded "$secs" "$cmd"
     status=$?
+
+    if [ "$status" -eq "$TIMED_OUT" ]; then
+        record_halt executor \
+            "continue.respawn exceeded limits.executor_timeout_seconds (${secs}s) and was killed"
+        continue
+    fi
     [ "$status" -eq 0 ] ||
         die 2 "respawn command exited ${status}; stopping rather than spinning"
 done

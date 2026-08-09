@@ -187,7 +187,17 @@ The detect line names the batch and its exact task ids. Use those ids. Never
      --feature <feature> --prompt "<payload>" --evidence <file>
    ```
    `kind=agent` means dispatch through the harness' own sub-agent mechanism.
-   `kind=command` means spawn that command line.
+   `kind=command` means spawn that command line. A `timeout=<seconds>` field is
+   **binding on you**: it is `limits.executor_timeout_seconds`, and whoever
+   spawns the process owns the clock. A stage that passes it has failed. Stop
+   waiting, record the halt, and do not retry - a timeout is an executor
+   failure, not a flake:
+   ```bash
+   python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> \
+     --halt executor --detail "<stage> exceeded limits.executor_timeout_seconds"
+   ```
+   No `timeout=` field means unlimited. `loop.sh` applies the same rule to the
+   respawn it spawns itself.
 2. **Build the payload** per [executors.md](references/executors.md): the task
    definitions in full, the Test Coverage Matrix, the spec ACs they trace to,
    the gate commands, `coding-principles.md` from the sibling skill, the
@@ -322,8 +332,9 @@ Done when: the reason is recorded and the run has stopped.
    [iteration-summary.template.md](assets/iteration-summary.template.md).
 3. **Continue gate: re-enter Step 1 immediately, in the same turn.** Stop only
    when the line just handled was `phase=E` or `phase=H`. The summary marks the
-   round; it does not end the turn. `continue.in_turn = false` disables this and
-   returns control after each iteration.
+   round; it does not end the turn. There is no config key that disables this:
+   LOOP-06 AC 1 requires it, and an unattended run that returns control after
+   every iteration is the problem this skill exists to remove.
 
 ---
 

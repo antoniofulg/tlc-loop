@@ -7,13 +7,18 @@ Derived from T3's "Done when" criteria plus:
     `ultra` exists in no provider
   - LOOP-05 AC 2: an unsupported effort is rejected before dispatch
   - design.md D8: TOML has no null, so an omitted limit means unlimited
+  - T39 / LOOP-06: every key the config defaults has a reader, and a `[limits]`
+    value that is not a positive integer is rejected at load
 """
 
 import os
+import re
 import tempfile
 import unittest
 
 import _config
+
+SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 
 
 def _write(root, text):
@@ -32,8 +37,8 @@ class AbsentFile(unittest.TestCase):
             self.assertEqual(cfg["version"], 1)
             self.assertEqual(cfg["execute"]["batch_size"], 7)
             self.assertIsNone(cfg["verify"]["max_rounds"])
-            self.assertIs(cfg["continue"]["in_turn"], True)
             self.assertEqual(cfg["continue"]["mode"], "auto")
+            self.assertNotIn("in_turn", cfg["continue"])
             self.assertEqual(
                 cfg["continue"]["respawn"],
                 {"provider": "auto", "model": None, "effort": None},
@@ -187,6 +192,138 @@ class EffortValidation(unittest.TestCase):
             with self.assertRaises(_config.ConfigError) as ctx:
                 _config.load_config(root)
             self.assertIn("continue.respawn", str(ctx.exception))
+
+
+class LimitValues(unittest.TestCase):
+    """T39: a limit the loop cannot compare against never fires.
+
+    An unlimited run is a documented choice (D8, by omitting the key). A limit
+    that is present but unusable is not: it reads as a ceiling and behaves like
+    no ceiling, which is the difference between a run that halts at 2am and one
+    that is still hanging at 8am.
+    """
+
+    def test_rejects_a_non_integer_limit(self):
+        with tempfile.TemporaryDirectory() as root:
+            _write(root, '[limits]\nexecutor_timeout_seconds = "1800"\n')
+            with self.assertRaises(_config.ConfigError) as ctx:
+                _config.load_config(root)
+            self.assertIn("limits.executor_timeout_seconds", str(ctx.exception))
+
+    def test_rejects_zero_rather_than_reading_it_as_unlimited(self):
+        with tempfile.TemporaryDirectory() as root:
+            _write(root, "[limits]\nmax_iterations = 0\n")
+            with self.assertRaises(_config.ConfigError) as ctx:
+                _config.load_config(root)
+            self.assertIn("omit the key", str(ctx.exception))
+
+    def test_rejects_a_negative_limit(self):
+        with tempfile.TemporaryDirectory() as root:
+            _write(root, "[limits]\nmax_minutes = -30\n")
+            with self.assertRaises(_config.ConfigError):
+                _config.load_config(root)
+
+    def test_every_limit_key_is_checked(self):
+        for key in _config.LIMIT_KEYS:
+            with tempfile.TemporaryDirectory() as root:
+                _write(root, f"[limits]\n{key} = 0\n")
+                with self.assertRaises(_config.ConfigError, msg=key) as ctx:
+                    _config.load_config(root)
+                self.assertIn(f"limits.{key}", str(ctx.exception))
+
+    def test_a_positive_integer_is_accepted(self):
+        with tempfile.TemporaryDirectory() as root:
+            _write(root, "[limits]\nexecutor_timeout_seconds = 1800\n")
+            limits = _config.load_config(root)["limits"]
+            self.assertEqual(limits["executor_timeout_seconds"], 1800)
+
+
+def audited_key_names(config):
+    """Every key name the config declares, excluding the stage names themselves.
+
+    A stage name is a namespace the user chooses (`[stages.whatever]` is legal),
+    not a key with a documented default. Everything else in `defaults()` is a
+    promise that something acts on it.
+    """
+    names = set()
+
+    def walk(node, skip_own_keys=False):
+        for key, value in node.items():
+            if not skip_own_keys:
+                names.add(key)
+            if isinstance(value, dict):
+                walk(value, skip_own_keys=(key == "stages"))
+
+    walk(config)
+    return names
+
+
+def reader_sources():
+    """`{relative path: text}` for every non-test script that may read a key.
+
+    `_config.py` is excluded on purpose. Declaring a key and merging the user's
+    value into the returned dict is exactly what `continue.in_turn` did for the
+    whole of its life, so counting that as a read would make this check unable
+    to fail for the reason it exists.
+    """
+    sources = {}
+    for name in sorted(os.listdir(SCRIPTS)):
+        if name.startswith("test_") or name == "_config.py":
+            continue
+        if not name.endswith((".py", ".sh")):
+            continue
+        with open(os.path.join(SCRIPTS, name), encoding="utf-8") as handle:
+            sources[name] = handle.read()
+    return sources
+
+
+def unread_keys(names, sources):
+    return sorted(
+        name
+        for name in names
+        if not any(
+            re.search(rf"\b{re.escape(name)}\b", text) for text in sources.values()
+        )
+    )
+
+
+class EveryDeclaredKeyHasAReader(unittest.TestCase):
+    """T39: a config key nothing reads is a promise the loop does not keep.
+
+    This has bitten three times - `verify.max_rounds`, then
+    `limits.executor_timeout_seconds`, `continue.in_turn`, and `continue.mode` -
+    and each time it was found by somebody auditing by hand. The next one fails
+    the Quick gate instead.
+
+    The check is textual: a key named only in a comment counts as read. That is
+    deliberate - `loop.sh` enforces the executor timeout while naming the key
+    only in prose - and it is the limit of what a static scan can claim. What it
+    catches is the case every one of those four was: a key nobody wired to
+    anything at all.
+    """
+
+    def test_every_key_the_config_defaults_is_read_by_a_script(self):
+        unread = unread_keys(audited_key_names(_config.defaults()), reader_sources())
+        self.assertEqual(
+            unread,
+            [],
+            "these keys are declared in _config.defaults() and read by no "
+            f"non-test script: {', '.join(unread)}. Give each one a reader or "
+            "remove it from the config, the schema, the example, and SKILL.md.",
+        )
+
+    def test_the_check_names_a_key_that_nothing_reads(self):
+        # Without this the check could pass because the scan found nothing.
+        config = _config.defaults()
+        config["limits"]["nobody_reads_this_knob"] = None
+        unread = unread_keys(audited_key_names(config), reader_sources())
+        self.assertEqual(unread, ["nobody_reads_this_knob"])
+
+    def test_the_scan_reaches_the_scripts_that_do_the_reading(self):
+        sources = reader_sources()
+        for name in ("detect_phase.py", "resolve_stage.py", "init_loop.py", "loop.sh"):
+            self.assertIn(name, sources)
+        self.assertNotIn("_config.py", sources)
 
 
 if __name__ == "__main__":

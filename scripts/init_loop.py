@@ -15,8 +15,12 @@ Preconditions, checked in this order and each naming itself on failure:
 2. `.specs/features/<feature>/tasks.md` exists.
 3. The sibling `validate_tasks.py` exits 0 on it. A plan that fails its own
    gate is not a plan the loop will execute unattended.
-4. `.specs/loop.config.toml` parses. An absent file is fine - documented
-   defaults apply - but a malformed one is not.
+4. `.specs/loop.config.toml` parses, declares a schema `version` this loop
+   understands, and names a `continue.mode` that exists. An absent file is fine
+   - documented defaults apply - but a malformed or misspelled one is not. Both
+   checks belong here because both failures are silent otherwise: a future
+   schema would be half-honoured, and a typo'd mode would pick the wrong way to
+   restart a turn, which nobody notices until the run has been idle all night.
 5. The running harness resolves, or a provider was named explicitly.
 
 **Harness detection asks rather than guesses** (LOOP-06 AC 4). Only markers
@@ -154,6 +158,26 @@ def main(argv=None):
         config = _config.load_config(root)
     except _config.ConfigError as exc:
         print(f"init_loop: {exc}", file=sys.stderr)
+        return 1
+
+    version = config["version"]
+    if version not in _config.SUPPORTED_VERSIONS:
+        print(
+            f"init_loop: loop.config.toml declares version {version!r}, which "
+            f"this loop does not understand; supported: "
+            f"{', '.join(str(v) for v in _config.SUPPORTED_VERSIONS)}",
+            file=sys.stderr,
+        )
+        return 1
+
+    mode = config["continue"]["mode"]
+    if mode not in _config.CONTINUE_MODES:
+        print(
+            f"init_loop: continue.mode is {mode!r}, which is not a continuation "
+            f"mechanism; accepted values are "
+            f"{', '.join(_config.CONTINUE_MODES)}",
+            file=sys.stderr,
+        )
         return 1
 
     # 5. The harness is known, or the user names it.
