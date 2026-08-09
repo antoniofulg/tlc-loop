@@ -46,7 +46,27 @@ not siblings.
 
 ## Quick start
 
-Plan a feature with `tlc-spec-driven` as usual. Once its `tasks.md` is approved:
+Plan a feature with `tlc-spec-driven` as usual. To opt into domain routing while
+Tasks are authored, name both skills:
+
+```text
+$tlc-spec-driven create the tasks for feature <name> for execution by
+$tlc-loop, with phases separated by stage.
+```
+
+This does not start the loop. It applies the
+[Tasks routing contract](references/tasks-routing-contract.md), including the
+read-only routing gate before approval:
+
+```bash
+python3 ~/.agents/skills/tlc-loop/scripts/validate_routing.py my-feature --root .
+```
+
+If you want to suggest the common domains, add: “prioritize foundation,
+backend, frontend, and docs as configured in `.specs/loop.config.toml`.” They
+are examples, not fixed names.
+
+Once `tasks.md` is approved:
 
 ```
 /tlc-loop my-feature
@@ -79,6 +99,23 @@ provider = "codex"
 model = "gpt-5.6-luna"
 effort = "max"
 
+[stages.foundation]
+provider = "codex"
+model = "gpt-5.6-luna"
+
+[stages.backend]
+provider = "codex"
+model = "gpt-5.6-luna"
+effort = "high"
+
+[stages.frontend]
+provider = "cursor"
+model = "composer-2.5"
+
+[stages.docs]
+provider = "claude"
+model = "haiku"
+
 [stages.verify]
 provider = "claude"
 model = "opus"
@@ -88,6 +125,9 @@ effort = "high"
 provider = "codex"
 model = "gpt-5.6-luna"
 effort = "max"
+
+[execute]
+strict_routing = false       # missing Stage -> implement
 
 [limits]                    # omit a key for unlimited
 no_progress_iterations = 3

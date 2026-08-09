@@ -244,6 +244,57 @@ def markdown_documents():
             yield relative, text
 
 
+def read_shipped(relative_path):
+    with open(os.path.join(ROOT, relative_path), encoding="utf-8") as handle:
+        return handle.read()
+
+
+class StageRoutingContractParity(unittest.TestCase):
+    """Public docs preserve the handoff and runtime routing vocabulary."""
+
+    def test_the_tasks_handoff_is_self_contained(self):
+        text = read_shipped("references/tasks-routing-contract.md")
+        for required in (
+            "$tlc-spec-driven",
+            "$tlc-loop",
+            "**Stage:**",
+            "strict_routing",
+            "validate_tasks.py",
+            "validate_routing.py",
+            "foundation",
+            "backend",
+            "frontend",
+            "docs",
+            "verify",
+            "fix",
+        ):
+            self.assertIn(required, text)
+
+    def test_the_runtime_docs_use_the_detected_stage(self):
+        skill = read_shipped("SKILL.md")
+        transitions = read_shipped("references/phase-transitions.md")
+        checklist = read_shipped("references/checklist.md")
+        self.assertIn("tasks-routing-contract.md", skill)
+        self.assertIn("--stage <stage-from-detect-line>", skill)
+        self.assertIn("tasks=<ids> stage=<effective-stage>", transitions)
+        self.assertIn("stage=", checklist)
+
+    def test_config_docs_describe_domain_stages_and_strict_routing(self):
+        schema = read_shipped("references/config-schema.md")
+        example = read_shipped("assets/loop.config.example.toml")
+        self.assertNotIn("Three stages exist", schema)
+        for text in (schema, example):
+            self.assertIn("strict_routing", text)
+            self.assertIn("stages.backend", text)
+            self.assertIn("stages.frontend", text)
+
+    def test_readme_shows_the_short_dual_skill_invocation(self):
+        readme = read_shipped("README.md")
+        self.assertIn("$tlc-spec-driven", readme)
+        self.assertIn("$tlc-loop", readme)
+        self.assertIn("validate_routing.py", readme)
+
+
 def _fenced(lines):
     """Indices inside a fenced code block. A JSON example is not a claim."""
     inside = False

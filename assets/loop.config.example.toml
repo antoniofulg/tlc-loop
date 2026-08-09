@@ -16,7 +16,10 @@ version = 1 # default: 1
 
 # --- Stages -----------------------------------------------------------------
 #
-# Three stages, resolved independently: implement, verify, fix.
+# Runtime defaults: implement, verify, fix. Add any lowercase kebab-case
+# implementation domain, such as foundation, backend, frontend, or docs.
+# `verify`, `fix`, and `continue.respawn` are reserved runtime roles and cannot
+# be selected by a Tasks phase.
 #
 #   provider  default "auto" - the harness detected at bootstrap
 #   model     default absent - leaves the provider's own default in place
@@ -32,6 +35,25 @@ version = 1 # default: 1
 provider = "codex"
 model = "gpt-5.6-luna"
 effort = "max"
+
+# Optional Phase B routes. They take the same provider/model/effort keys.
+[stages.foundation]
+provider = "codex"
+model = "gpt-5.6-luna"
+effort = "medium"
+
+[stages.backend]
+provider = "codex"
+model = "gpt-5.6-luna"
+effort = "high"
+
+[stages.frontend]
+provider = "cursor"
+model = "composer-2.5"
+
+[stages.docs]
+provider = "claude"
+model = "haiku"
 
 # The verifier decides whether the feature is done. It is worth the better
 # model, and it must not be the implementer: author is not verifier.
@@ -52,6 +74,8 @@ effort = "max"
 
 [execute]
 batch_size = 7 # default: 7. Whole phases are packed up to this many tasks.
+strict_routing = false # default: false. Missing Stage -> implement. Explicit
+                       # invalid stages are always rejected.
 
 [verify]
 max_rounds = 3 # omitted -> unlimited. Spending it without a PASS halts with

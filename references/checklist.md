@@ -42,6 +42,10 @@ happened, it is the wrong box: find the file or the exit code that proves it.
 - [ ] The harness was detected from a verified marker or named with
       `--respawn`. It was never guessed.
       *Evidence: the reason in parentheses on that same line.*
+- [ ] The bootstrap route map names every phase, effective stage, provider,
+      and model; no routing error was printed and `loop.json` was created only
+      after the routing gate passed.
+      *Evidence: the `route:` block and the state file.*
 - [ ] `objective` in `loop.json` is the user's text verbatim, not a paraphrase
       or a derived restatement.
       *Evidence: diff the field against the invocation text.*
@@ -55,6 +59,10 @@ happened, it is the wrong box: find the file or the exit code that proves it.
 - [ ] The tasks executed are exactly the ids in the detect line: none added,
       none dropped.
       *Evidence: compare the `tasks=` list against the checkpoint calls.*
+- [ ] The executor was resolved with the exact `stage=` value from the detect
+      line. No phase title or remembered default was used to choose it.
+      *Evidence: compare the detect line with the `resolve_stage.py --stage`
+      invocation.*
 - [ ] The payload stated "do not commit" verbatim, per
       [executors.md](executors.md).
       *Evidence: the dispatched payload text.*
@@ -77,7 +85,7 @@ happened, it is the wrong box: find the file or the exit code that proves it.
       author re-checking its own work reapplies the blind spot that produced
       the gap, so a shared executor voids the round.
       *Evidence: the resolved `--stage verify` invocation, and that it is not
-      the process that ran `--stage implement` or `--stage fix`.*
+      the process that ran the Phase B `stage=` value or `--stage fix`.*
 - [ ] The verifier ran read-only over the real tree.
       *Evidence: `git status --porcelain` before and after differ only by
       `validation.md`; the sensor's scratch copy is gone.*
