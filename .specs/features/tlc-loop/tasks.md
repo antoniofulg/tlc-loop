@@ -1504,7 +1504,7 @@ T30
 
 ---
 
-### T45: One canonical description of the no-diff contract
+### T45: One canonical description of the no-diff contract ✅
 
 **What**: Collapse the duplicated explanations into a single source and point the rest at it, rather than scanning five copies for drift.
 **Where**: `references/state-schema.md`
@@ -1519,10 +1519,10 @@ T30
 
 **Done when**:
 
-- [ ] `references/state-schema.md:225-226` no longer claims a no-diff task records no commit
-- [ ] Exactly one document explains the no-diff contract in full; every other mention is a pointer, not a restatement
-- [ ] The file no longer contradicts itself between its own sections
-- [ ] The count of independent explanations is reduced, and the new count is stated in the task's commit message so a future round can tell whether it grew back
+- [x] `references/state-schema.md:225-226` no longer claims a no-diff task records no commit
+- [x] Exactly one document explains the no-diff contract in full; every other mention is a pointer, not a restatement
+- [x] The file no longer contradicts itself between its own sections
+- [x] The count of independent explanations is reduced, and the new count is stated in the task's commit message so a future round can tell whether it grew back
 
 **Tests**: none
 **Gate**: build

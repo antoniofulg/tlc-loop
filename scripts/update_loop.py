@@ -117,11 +117,10 @@ def apply(state, args):
     if args.task_done:
         if state.get("current_task") == args.task_done:
             state["current_task"] = None
-        # `no_diff_tasks` has no writer. A task that produced no diff is
-        # committed empty by `checkpoint.py`, so its completion is a git
-        # trailer like any other. The field is kept, and still read by
-        # `detect_phase.py`, only so a state written before that change keeps
-        # its history.
+        # `no_diff_tasks` has no writer. It is legacy - kept, and still read by
+        # `detect_phase.py`, only so a state written before the change keeps
+        # its history. See `references/state-schema.md`, "The no-diff
+        # contract".
 
     if args.reconciled:
         # `tasks.md` ticked a task git does not confirm. Git decided, so the

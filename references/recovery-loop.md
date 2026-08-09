@@ -83,7 +83,7 @@ table names the level, never a specific build tool.
 | `checkpoint.py` exits 2 - message rejected by `check_commit.py` | Rewrite the message to Conventional Commits and retry. The message is wrong, not the validator. |
 | `checkpoint.py` exits 2 - trailer contradicts the flags | The message and the flags disagree about the task or gate level. Decide which is right, correct it, retry. |
 | `checkpoint.py` exits 1 - git or a hook refused the commit | Repair the hook's complaint at its root and retry the normal checkpoint. If the repair changed tracked source, re-run the gate first. |
-| `checkpoint.py` prints a SHA ending `PASS empty` | Not a failure. The task legitimately produced no diff, so it was committed with `--allow-empty`. The trailers are in git; nothing else has to be recorded. |
+| `checkpoint.py` prints a SHA ending `PASS empty` | Not a failure, and nothing else has to be recorded. See the no-diff contract in [state-schema.md](state-schema.md#the-no-diff-contract). |
 | An evidence artifact is missing or empty | Keep the phase open. Re-collect the evidence or re-run the lane. A completion claim without its artifact is not completion. |
 | An executor committed despite the ban | Keep the phase open, preserve the commit, run the gate yourself, repair trailer ownership, record the ambiguity. Never discard the work. |
 | A sibling-skill script cannot be resolved | `_paths` prints the absolute path it tried. Repair the installation so `tlc-spec-driven` sits next to this skill, then resume. |

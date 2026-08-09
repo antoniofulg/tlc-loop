@@ -16,11 +16,9 @@ Three refusals, in order, before anything is written:
    runs *before* the index is touched, so a rejected message cannot leave a
    half-staged tree behind (LOOP-02 AC 3).
 3. **A task that changed nothing still gets a commit.** `--allow-empty`, same
-   `Task:` and `Gate:` trailers, and the line reports it as `empty`. LOOP-02
-   AC 6 forbids fabricating a source diff, and an empty commit has none: it
-   carries the trailers and nothing else. Recording the completion only in
-   `loop.json` would put it in the one place git cannot rebuild, so deleting
-   that file would re-dispatch a finished task.
+   `Task:` and `Gate:` trailers, and the line reports it as `empty`. The reason
+   is written out once, in `references/state-schema.md` under "The no-diff
+   contract", and nowhere else.
 
 Git hooks always run: this script never passes git a flag that would bypass
 them, which is what keeps a project's own commit-msg or pre-commit guard in
@@ -171,9 +169,8 @@ def main(argv=None):
         print(f"checkpoint: git add failed: {added.stderr.strip()}", file=sys.stderr)
         return 1
 
-    # 4. Nothing staged means the task legitimately produced no diff. It still
-    #    gets a commit: the trailers are the only durable record of completion,
-    #    and an empty commit carries them without fabricating a diff.
+    # 4. Nothing staged means the task legitimately changed nothing. It still
+    #    gets a commit; the reason is refusal 3 in the docstring above.
     empty = _git(root, "diff", "--cached", "--quiet").returncode == 0
     allow_empty = ["--allow-empty"] if empty else []
 

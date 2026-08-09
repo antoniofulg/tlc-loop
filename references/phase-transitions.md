@@ -136,12 +136,10 @@ that survives several iterations is stored once. The reverse case is not a
 contradiction: an unticked header claims nothing, so a trailer without a tick
 just means the plan was never annotated.
 
-`no_diff_tasks` is not an exception to this rule, and it is not the mechanism
-either. A config-only or docs-only task that changes nothing is committed with
-`--allow-empty`, so it carries the same `Task:` and `Gate:` trailers as every
-other task and git answers for it alone. The union is legacy: it exists so a
-run already in flight when that changed keeps the entries it had written. It is
-additive only, and it can never mark a task incomplete that git says is
+`no_diff_tasks` is not an exception to this rule and it is not the mechanism
+either. Git answers for a task that changed nothing too - see the no-diff
+contract in [state-schema.md](state-schema.md#the-no-diff-contract). The union
+is legacy, additive only, and can never mark a task incomplete that git says is
 complete.
 
 A duplicate `Task:` trailer, which a rebase or cherry-pick can leave behind,
@@ -227,7 +225,7 @@ What has to become true before detection stops returning the same line.
 | Phase | Leaves when |
 | --- | --- |
 | `0` | `init_loop.py` has written `loop.json`. The next detect re-derives from git, so bootstrap never decides what to work on. |
-| `B` | Every task in the batch carries a `Task:` trailer. The batch is not "done" because a worker said so; it is done because the trailers exist - and a task that changed nothing has one too, on an empty commit. |
+| `B` | Every task in the batch carries a `Task:` trailer. The batch is not "done" because a worker said so; it is done because the trailers exist - including for a task that changed nothing ([the no-diff contract](state-schema.md#the-no-diff-contract)). |
 | `V` | A verdict is recorded: `PASS` closes the feature, `FAIL` with open gaps moves to `F`. |
 | `F` | The gaps are consumed (`gaps_open` back to 0), which returns detection to `V` for a fresh round. |
 | `E` | Terminal. Nothing follows. Print the done-signature and stop. |

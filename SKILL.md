@@ -51,7 +51,8 @@ which is what `--root` carries.
 
 **Git is the status truth.** Completed tasks come from
 `git log --format="%(trailers:key=Task,valueonly)"`. A task that changed
-nothing is committed empty, so it carries a trailer like any other. When
+nothing carries a trailer like any other
+([the no-diff contract](references/state-schema.md#the-no-diff-contract)). When
 `loop.json` and git disagree, git wins. This is what makes resume correct.
 
 **Two single writers, no exceptions.** `checkpoint.py` is the only writer of
@@ -220,9 +221,9 @@ The detect line names the batch and its exact task ids. Use those ids. Never
      --task T7 --gate quick --gate-result PASS --message "<conventional commit>"
    ```
    Exit 2 is a refusal: no asserted pass, or `check_commit.py` rejected the
-   message. A task that legitimately produced no diff is committed empty and
-   the line ends `PASS empty`; nothing else has to be recorded, because the
-   trailers are in git.
+   message. A task that changed nothing prints a line ending `PASS empty` and
+   needs nothing else recorded - see the no-diff contract in
+   [state-schema.md](references/state-schema.md#the-no-diff-contract).
 5. **Record a `reconciled=<ids>` field if the detect line carried one.** It
    means `tasks.md` ticks those tasks as done and git does not confirm it. Git
    already decided - they are in the batch and you run them - but the override

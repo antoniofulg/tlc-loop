@@ -82,8 +82,8 @@ and the override lands in `reconciled` below rather than passing silently.
 So task progress is the one thing the file can lose without losing anything:
 delete `loop.json` mid-run and the next detect prints
 `phase=0 action=bootstrap`; re-bootstrap and it names the same task, because
-progress was never stored here. A task that changed nothing is included - it is
-committed empty, so it carries a `Task:` trailer like every other task (T37).
+progress was never stored here. A task that changed nothing is included too -
+see [the no-diff contract](#the-no-diff-contract).
 
 ## What deleting the file costs
 
@@ -120,7 +120,7 @@ beats a state nobody can read.
 | `harness_resolved` | string | bootstrap | The harness detected at bootstrap, or the one named explicitly. |
 | `current_batch` | array of string | update | Task ids in the batch being executed, e.g. `["T8","T9"]`. |
 | `current_task` | string or null | update | Task started but not yet committed. `null` between tasks. |
-| `no_diff_tasks` | array of string | nothing | Legacy. Tasks that produced no diff, recorded here before they were committed empty. Still read. |
+| `no_diff_tasks` | array of string | nothing | Legacy; still read. See [the no-diff contract](#the-no-diff-contract). |
 | `reconciled` | array of object | update | Tasks where git overrode a `tasks.md` tick. See below. |
 | `verify` | object | bootstrap, update | Verification round state. See below. |
 | `counters` | object | bootstrap, update | Runaway detectors. See below. |
@@ -136,17 +136,35 @@ beats a state nobody can read.
 | `halted` | A halt condition fired. Set automatically whenever a halt is recorded. |
 | `complete` | The run finished and was verified. |
 
-### `no_diff_tasks`
+### The no-diff contract
 
-**Legacy. Nothing writes it.** A config-only or documentation-only task can
-pass its gate while changing nothing that git will commit. `checkpoint.py` now
-commits it with `--allow-empty`, carrying the same `Task:` and `Gate:`
-trailers, so its completion is in git like every other task's.
+**This section is the skill's only full description of what happens to a task
+that changes nothing. Every other mention links here instead of restating it.**
+That rule exists because the restatements drifted: the same claim shipped false
+four times, each time in a document that had been correct when it was written.
+One description cannot disagree with itself.
 
-Before that, such a task was recorded here and nowhere else - which meant
-deleting `loop.json` re-dispatched it. `detect_phase.py` still unions this list
-with the git trailers so a run that was already in flight keeps the entries it
-wrote. New runs leave it empty.
+A config-only or documentation-only task can pass its gate while changing
+nothing git would commit. It is committed anyway. `checkpoint.py` stages, finds
+an empty index, and commits with `--allow-empty`, carrying the same `Task:` and
+`Gate:` trailers as every other task; the line it prints ends `PASS empty`.
+
+Three consequences follow, and together they are the reason for the design:
+
+- **Completion lives in git for every task, without exception.** The trailer is
+  the record, so `detect_phase.py` reads such a task back like any other and
+  deleting `loop.json` cannot re-dispatch it.
+- **No source diff is fabricated** (LOOP-02 AC 6). An empty commit has none: it
+  carries the trailers and nothing else.
+- **It is a commit like any other.** The task records one, so it resets
+  `iterations_without_commit` exactly as a task that touched a file does. It is
+  not a commitless iteration and contributes nothing to `no_progress`.
+
+`no_diff_tasks` is the legacy of what this replaced (T37), when such a task was
+recorded in `loop.json` and nowhere else - the one place git cannot rebuild, so
+deleting the file re-dispatched a finished task. Nothing writes the field now.
+`detect_phase.py` still unions it with the git trailers so a run already in
+flight keeps the entries it wrote; a new run leaves it empty.
 
 ### `reconciled`
 
@@ -222,8 +240,9 @@ iteration closes without one. It backs the `no_progress` halt (LOOP-06 AC 6):
 if the loop keeps iterating but nothing lands in git, something is wrong with
 detection or dispatch and the run should stop rather than spin.
 
-A task that produced no diff records no commit, so it increments this counter
-like any other commitless iteration.
+A task that changed nothing is not a commitless iteration: it is committed
+empty, so it resets this counter like any other task. See
+[the no-diff contract](#the-no-diff-contract).
 
 ### `gate_attempts`
 

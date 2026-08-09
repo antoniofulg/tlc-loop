@@ -278,6 +278,15 @@ class TheNoDiffContractIsDescribedAsItIs(unittest.TestCase):
     any other. `no_diff_tasks` is read, never written, and kept only for a run
     that was already in flight. A document still teaching the old mechanism sends
     an agent looking for a task completion that git will not have.
+
+    **This is a backstop, not the mechanism** (T45). The claim came back false a
+    fourth time in wording that trips none of the needles below, because the
+    same falsehood is always expressible another way - so the list was never
+    going to be complete. What prevents recurrence is that the contract is now
+    explained in exactly one place, `references/state-schema.md` under "The
+    no-diff contract", and every other mention is a link. Do not extend the
+    needle list in place of preserving that. Extend it only to nail a specific
+    phrasing that has already shipped.
     """
 
     def test_no_shipped_document_describes_the_retired_mechanism(self):
