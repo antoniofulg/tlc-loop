@@ -68,6 +68,72 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: references/state-schema.md:89 vs :84-87 (references/state-schema.md)
 - last seen: 2026-08-08T23:12:42Z
 
+### L-010 - Put a timeout's force-kill inside the watchdog itself, never after the wait it is meant to rescue; anything that blocks that wait disables the escalation entirely.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `shell/process-supervision` · harmful: 0
+- features: tlc-loop
+- evidence: scripts/loop.sh:123-138 (LOOP-06 executor_timeout_seconds) (shell/process-supervision)
+- last seen: 2026-08-09T05:57:53Z
+
+### L-011 - Backgrounding a child into its own process group changes its terminal semantics: redirect its stdin, or a tty read stops the job, SIGTERM only queues, and the parent's wait never returns.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `shell/process-supervision` · harmful: 0
+- features: tlc-loop
+- evidence: scripts/loop.sh:108-119 (LOOP-06 executor_timeout_seconds) (shell/process-supervision)
+- last seen: 2026-08-09T05:57:53Z
+
+### L-012 - Killing a helper subshell does not kill the command it forked; signal the process group or the child outlives the parent and keeps holding its inherited stdout.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `shell/process-supervision` · harmful: 0
+- features: tlc-loop
+- evidence: scripts/loop.sh:116-127 (LOOP-06 executor_timeout_seconds) (shell/process-supervision)
+- last seen: 2026-08-09T05:57:53Z
+
+### L-013 - A cleanup step nothing observes is untested however obviously correct it looks; assert the process, file, or handle is gone after the happy path, not only that the result was right.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `testing/resource-cleanup` · harmful: 0
+- features: tlc-loop
+- evidence: M13 scripts/loop.sh:126-127 (survived 372/372) (testing/resource-cleanup)
+- last seen: 2026-08-09T05:57:53Z
+
+### L-014 - A change that inverts a mechanism obliges a sweep of every document that explains that mechanism, not only those repeating a retracted sentence; a scanner keyed on phrasing cannot see a stale explanation.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `docs/parity` · harmful: 0
+- features: tlc-loop
+- evidence: references/phase-transitions.md:139-143,228 (LOOP-02 AC 6 after T37) (docs/parity)
+- last seen: 2026-08-09T05:57:53Z
+
+### L-015 - A document that claims a property of every member of a family needs a test that iterates the family; one written for the member you last touched leaves the others unverified.
+- signal: `spec_deviation` · recurrence: 1 feature(s) · scope: `docs/parity` · harmful: 0
+- features: tlc-loop
+- evidence: references/providers.md:195-198 vs scripts/resolve_stage.py:76-91 (docs/parity)
+- last seen: 2026-08-09T07:33:58Z
+
+### L-016 - A phrase-list scanner is not repaired by adding phrases; anchor the check on a structural invariant the wording cannot evade, or the same stale claim ships again in new words.
+- signal: `spec_deviation` · recurrence: 1 feature(s) · scope: `docs/parity` · harmful: 0
+- features: tlc-loop
+- evidence: references/state-schema.md:225-226 (T42 Done-when 3 falsified) (docs/parity)
+- last seen: 2026-08-09T07:33:58Z
+
+### L-017 - Test teardown that signals a fixture must send the one signal the fixture cannot ignore; a probe built to ignore SIGTERM outlives a SIGTERM-based cleanup exactly when the test fails.
+- signal: `spec_deviation` · recurrence: 1 feature(s) · scope: `testing/resource-cleanup` · harmful: 0
+- features: tlc-loop
+- evidence: scripts/test_unit_spawn.py:73-75 (11 probes leaked during the round-6 sensor) (testing/resource-cleanup)
+- last seen: 2026-08-09T07:33:58Z
+
+### L-018 - Once wait() returns, the reaped pid may already belong to something else: do not signal it again, and catch every errno the signal call can raise, not only no-such-process.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `shell/process-supervision` · harmful: 0
+- features: tlc-loop
+- evidence: scripts/_spawn.py:57-62,70-81 (LOOP-05 AC 5: expiry exits non-zero, halt not recorded) (shell/process-supervision)
+- last seen: 2026-08-09T08:37:23Z
+
+### L-019 - When a mitigation covers one dispatch path only, state what the other path does; a hazard note scoped to one branch is read as covering both, especially when the uncovered branch is the default.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `docs/hazards` · harmful: 0
+- features: tlc-loop
+- evidence: LOOP-05 AC 3 (spec.md:164) vs README.md:175-185 (docs/hazards)
+- last seen: 2026-08-09T08:37:23Z
+
+### L-020 - Replacing a duplicated claim with one canonical section removes the drift but asserts nothing; pin the structure itself - one full explanation, every other mention a link - or the convention is held by memory again.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `docs/parity` · harmful: 0
+- features: tlc-loop
+- evidence: M11 references/state-schema.md:243-245 (survived 396/396) (docs/parity)
+- last seen: 2026-08-09T08:37:24Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.
