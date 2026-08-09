@@ -1441,7 +1441,7 @@ T30
 
 ---
 
-### T43: Say what the executor halt now covers
+### T43: Say what the executor halt now covers ✅
 
 **What**: Document the timeout kill as a cause of `reason=executor`, and clean up the marker file's lifetime.
 **Where**: `README.md`
@@ -1456,9 +1456,9 @@ T30
 
 **Done when**:
 
-- [ ] `README.md`'s `executor` row names a timed-out provider alongside the missing, unauthenticated, and out-of-quota cases
-- [ ] Any temporary file `loop.sh` still creates is removed on every exit path, including a signal
-- [ ] The halt-reason parity test still passes with the reworded row
+- [x] `README.md`'s `executor` row names a timed-out provider alongside the missing, unauthenticated, and out-of-quota cases
+- [x] Any temporary file `loop.sh` still creates is removed on every exit path, including a signal
+- [x] The halt-reason parity test still passes with the reworded row
 
 **Tests**: none
 **Gate**: build

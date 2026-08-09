@@ -157,7 +157,7 @@ Every stop is recorded, never a silent stall.
 | `phase=E` | Verified PASS. The only successful terminal |
 | `no_progress` | N iterations with no new commit — usually a bug, not slow work |
 | `gate_stuck` | The same task's gate failed more times than the limit allows |
-| `executor` | A provider CLI is missing, unauthenticated, or out of quota |
+| `executor` | A provider CLI is missing, unauthenticated, out of quota, or was killed for outliving its configured timeout |
 | `verify_exhausted` | Verify rounds spent without a PASS |
 | `state_corrupt` | `loop.json` cannot be parsed |
 | `limit` | A configured iteration or minute ceiling |

@@ -650,6 +650,54 @@ class TestRespawnThatReadsTheTerminal(LoopShTestCase):
         self.assertIn("--halt executor", recorded[0])
 
 
+class TestTemporaryFiles(LoopShTestCase):
+    """T43: the driver's own temp file outlives no exit path, signals included.
+
+    `LOOP_EVIDENCE` is where codex writes its result, so the driver mktemps one
+    when the caller names none. A run left overnight is exactly the run somebody
+    terminates from another window, and a driver that leaks a file per run leaks
+    one per night.
+    """
+
+    PATTERN = os.path.join(
+        os.environ.get("TMPDIR", "/tmp"), "tlc-loop-evidence-*"
+    )
+
+    def test_the_evidence_file_is_removed_when_the_driver_is_signalled(self):
+        before = set(glob.glob(self.PATTERN))
+        env = self.stub_env(
+            ["phase=B action=execute_batch batch=P1 tasks=T1", "phase=E action=done"],
+            resolve_out="kind=command provider=stub cmd=/bin/sh -c 'sleep 22'",
+        )
+        env["LOOP_EVIDENCE"] = ""
+        driver = subprocess.Popen(
+            ["bash", LOOP_SH, "demo", "--root", self.root],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=env,
+            start_new_session=True,
+        )
+        self.addCleanup(subprocess.run, ["pkill", "-f", "sleep 22"],
+                        capture_output=True)
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and not set(glob.glob(self.PATTERN)) - before:
+            time.sleep(0.1)
+        created = set(glob.glob(self.PATTERN)) - before
+        for path in created:
+            self.addCleanup(lambda p=path: os.path.isfile(p) and os.remove(p))
+
+        self.assertTrue(created, "the driver never created an evidence file")
+        os.killpg(driver.pid, signal.SIGTERM)
+        driver.wait(timeout=20)
+        time.sleep(0.5)
+
+        self.assertEqual(
+            set(glob.glob(self.PATTERN)) - before,
+            set(),
+            "a terminated driver left its evidence file behind",
+        )
+
+
 class TestSyntax(unittest.TestCase):
     def test_bash_n_passes(self):
         checked = subprocess.run(
