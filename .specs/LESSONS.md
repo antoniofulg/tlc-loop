@@ -56,6 +56,18 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: mutant M6: scripts/update_loop.py:153 survives the quick gate declared by T34 (scripts/update_loop.py)
 - last seen: 2026-08-08T22:46:50Z
 
+### L-008 - Closing a documentation gap at the reviewer's cited lines is not closing it; grep the claim's distinctive wording across references, code docstrings, and the planning record first.
+- signal: `spec_deviation` · recurrence: 1 feature(s) · scope: `references/` · harmful: 0
+- features: tlc-loop
+- evidence: references/phase-transitions.md:155 (claim survives a7d1460) (references/)
+- last seen: 2026-08-08T23:12:42Z
+
+### L-009 - When an edit changes a list's count or membership, re-read every nearby sentence that refers to it by count or position; those references do not update themselves.
+- signal: `spec_deviation` · recurrence: 1 feature(s) · scope: `references/state-schema.md` · harmful: 0
+- features: tlc-loop
+- evidence: references/state-schema.md:89 vs :84-87 (references/state-schema.md)
+- last seen: 2026-08-08T23:12:42Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

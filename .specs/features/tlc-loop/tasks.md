@@ -104,6 +104,7 @@ key against the code that reads it - the same check that exposed `max_rounds`.
 ```
 T37 -> T38
 T39
+T40
 ```
 
 ### Phase 11: Verifier round 3 fixes
@@ -1348,3 +1349,27 @@ T30
 
 **Tests**: unit
 **Gate**: quick
+
+---
+
+### T40: Ship the licence the README declares ✅
+
+**What**: Add the `LICENSE` file `README.md` says the project carries.
+**Where**: `LICENSE`
+**Depends on**: None
+**Reuses**: The `license: CC-BY-4.0` already in the `SKILL.md` frontmatter.
+**Requirement**: LOOP-06
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [x] `LICENSE` holds the full CC BY 4.0 text, matching what `README.md` and the `SKILL.md` frontmatter declare
+- [x] The three statements of the licence agree with each other
+- [x] The attribution names the work and its origin, so a reuser knows what to credit
+
+**Tests**: none
+**Gate**: build
