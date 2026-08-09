@@ -68,8 +68,9 @@ place.
 | | |
 | --- | --- |
 | **kind** | `agent` when the loop runs inside Claude Code, else `command` |
-| **invocation** | `claude -p {prompt} --model {model} --effort {effort} --permission-mode {perm} --output-format stream-json` |
+| **invocation** | `claude -p {prompt} --dangerously-skip-permissions --model {model} --effort {effort} --output-format stream-json` |
 | **effort mechanism** | Separate `--effort <level>` flag |
+| **approval bypass** | `--dangerously-skip-permissions`, always passed |
 | **evidence capture** | stdout, `--output-format stream-json` |
 | **accepted effort** | `low, medium, high, xhigh, max` - class B |
 
@@ -77,10 +78,10 @@ Effort and model are independent flags, so both are optional and either can be
 dropped without affecting the other. Verified in `claude --help`:
 
 ```
---effort <level>          Effort level for the current session
---model <model>           Model for the current session
---permission-mode <mode>  Permission mode to use for the session
---output-format <format>  Output format (only works with --print)
+--effort <level>                Effort level for the current session
+--model <model>                 Model for the current session
+--dangerously-skip-permissions  Bypass all permission checks.
+--output-format <format>        Output format (only works with --print)
 ```
 
 ---
@@ -90,14 +91,29 @@ dropped without affecting the other. Verified in `claude --help`:
 | | |
 | --- | --- |
 | **kind** | `command` |
-| **invocation** | `codex exec -m {model} -c model_reasoning_effort={effort} -C {repo} -o {evidence} {prompt}` |
+| **invocation** | `codex exec --dangerously-bypass-approvals-and-sandbox -m {model} -c model_reasoning_effort={effort} -C {repo} -o {evidence} {prompt}` |
 | **effort mechanism** | `-c model_reasoning_effort=<value>` config override |
+| **approval bypass** | `--dangerously-bypass-approvals-and-sandbox`, always passed |
 | **evidence capture** | `-o/--output-last-message <FILE>` |
 | **accepted effort** | `minimal, low, medium, high, xhigh, max` - class C, per-model |
 
 `-o` writes the agent's final message to a file, which is the cleanest evidence
 channel of the three: it is a file the loop can check for existence and
 content, not a stream it has to parse. `-C/--cd` sets the working root.
+
+The bypass is passed by the loop, not left to the operator. Verified in
+`codex exec --help`:
+
+```
+--dangerously-bypass-approvals-and-sandbox
+    Skip all confirmation prompts and execute commands without sandboxing.
+    EXTREMELY DANGEROUS.
+```
+
+`approval_policy = "never"` in `~/.codex/config.toml` produces the same
+behaviour, and that is exactly the problem: it is a property of one machine.
+A skill that depends on it works for whoever wrote it and hangs on an approval
+prompt for everyone else, four hours into an unattended run.
 
 Two cautions, both from discovery:
 
@@ -120,6 +136,7 @@ accept a subset.
 | **kind** | `command` |
 | **invocation** | `cursor-agent -p {prompt} --force --model {model} --output-format json` |
 | **effort mechanism** | Baked into the model id, or bracket syntax on `--model` |
+| **approval bypass** | `-f, --force`, always passed |
 | **evidence capture** | stdout, `--output-format json` |
 | **accepted effort** | `low, medium, high, xhigh, max` - class B, per-model |
 
@@ -185,6 +202,10 @@ The same placeholder rules apply. A custom provider carries no effort
 validation, because the loop has no catalogue for it: whatever `effort`
 resolves to is substituted as given.
 
+It carries no approval bypass either, for the same reason - the loop does not
+know that CLI's flag. **Put it in the template yourself.** A custom provider
+that stops to ask is a run that hangs until someone notices.
+
 This is also the escape hatch for using `herdr`, or any other orchestrator, as
 an executor. It is one ordinary `command` provider, not a special case.
 
@@ -192,12 +213,31 @@ an executor. It is one ordinary `command` provider, not a special case.
 
 ## Blast radius
 
-Every `command` executor here runs non-interactively with approvals disabled -
-`--force` for cursor, `approval_policy = "never"` or
-`--dangerously-bypass-approvals-and-sandbox` for codex. That is what makes
-unattended execution possible, and it is also what makes it dangerous.
+**Every built-in `command` executor is dispatched with its approval guardrail
+switched off, by the loop, on every invocation.** Not by the operator's config,
+not conditionally:
 
-The loop's answer is that a blast-radius situation **halts** rather than asks:
-with nobody watching, asking is the same as hanging. Treat auto-approval as a
-precondition the operator accepted deliberately, never as a default the loop
-turns on by itself.
+| Provider | Argument the loop passes |
+| --- | --- |
+| `claude` | `--dangerously-skip-permissions` |
+| `codex` | `--dangerously-bypass-approvals-and-sandbox` |
+| `cursor` | `--force` |
+
+Read that as it is written. A dispatched executor can edit any file it can
+reach, run any command, and delete anything, with nothing standing between it
+and the machine. codex additionally runs unsandboxed. That is the deal
+unattended execution makes: there is nobody at the keyboard at 3am, so a
+prompt and a hang are the same event, and a run that asks is a run that stalls
+silently until morning.
+
+`resolve_stage.NON_INTERACTIVE` is where the arguments live, and every one of
+them is pinned by a test, so a provider cannot be added without a deliberate
+decision about this.
+
+What the loop does *not* do is decide on its own that a dangerous operation is
+fine. A blast-radius situation - a push, a deploy, a production data change -
+**halts and waits** rather than asking or proceeding. The bypass buys
+non-interactivity inside the local sandbox of a task; it is not authorization.
+
+Run this on a machine, a container, or a worktree where that blast radius is
+acceptable. If it is not, do not run the loop there.

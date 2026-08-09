@@ -96,6 +96,18 @@ T21 -> T23
 T24
 ```
 
+### Phase 14: Non-interactive dispatch, and fewer copies of the truth
+
+Round 6 found a command executor that prompts for approval - the same overnight
+hang by a third door - and the no-diff claim drifting for a fourth time. The
+second one is not a scanner problem; it is a duplication problem.
+
+```
+T44
+T45
+T46
+```
+
 ### Phase 13: Retire the bash watchdog
 
 Round 5 found the timeout deadlocks the driver on a real terminal, which is
@@ -1462,3 +1474,79 @@ T30
 
 **Tests**: none
 **Gate**: build
+
+---
+
+### T44: Every command executor runs without prompting ✅
+
+**What**: Pass the approval-bypass argument each provider needs, instead of relying on the user's global configuration.
+**Where**: `scripts/resolve_stage.py`
+**Depends on**: None
+**Reuses**: The provider adapter table; the `--force` precedent already in place for cursor.
+**Requirement**: LOOP-05
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [x] The codex and claude command invocations each carry the argument that makes them non-interactive, verified against each CLI's own `--help`
+- [x] No provider depends on a setting in the user's global configuration to avoid prompting - the skill passes it explicitly
+- [x] `{perm}` is either a real placeholder the resolver substitutes or gone from `references/providers.md`
+- [x] A test pins the non-interactive argument for **every** command provider, not only cursor
+- [x] `references/providers.md` and `references/recovery-loop.md` describe what the code actually passes
+- [x] The risk this creates is stated where a user will see it: an unattended executor runs without approval prompts by design
+
+**Tests**: unit
+**Gate**: quick
+
+---
+
+### T45: One canonical description of the no-diff contract
+
+**What**: Collapse the duplicated explanations into a single source and point the rest at it, rather than scanning five copies for drift.
+**Where**: `references/state-schema.md`
+**Depends on**: None
+**Reuses**: The scanner from T38/T42 as a backstop, not as the mechanism.
+**Requirement**: LOOP-02
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [ ] `references/state-schema.md:225-226` no longer claims a no-diff task records no commit
+- [ ] Exactly one document explains the no-diff contract in full; every other mention is a pointer, not a restatement
+- [ ] The file no longer contradicts itself between its own sections
+- [ ] The count of independent explanations is reduced, and the new count is stated in the task's commit message so a future round can tell whether it grew back
+
+**Tests**: none
+**Gate**: build
+
+---
+
+### T46: Test cleanup that survives a SIGTERM-immune probe
+
+**What**: Make the spawner tests reap probes built to ignore `SIGTERM`, which currently leak.
+**Where**: `scripts/test_unit_spawn.py`
+**Depends on**: None
+**Reuses**: The `pgrep` sweep the tests already perform.
+**Requirement**: LOOP-06
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [ ] Cleanup escalates past `SIGTERM`, so a probe written to ignore it is still reaped
+- [ ] A run of the suite leaves no probe process behind, asserted rather than assumed
+- [ ] The comment describing the cleanup matches what it does
+
+**Tests**: unit
+**Gate**: quick

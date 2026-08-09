@@ -81,6 +81,16 @@ python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> \
 a question and a hang are the same event. A recorded halt is resumable the
 moment a human reads it; a prompt sits on a pipe until someone kills it.
 
+**A dispatched executor runs with no approval guardrail, by design.** Every
+built-in `command` provider is spawned with its approval prompts disabled -
+`--dangerously-skip-permissions`, `--dangerously-bypass-approvals-and-sandbox`,
+`--force` - because of the rule above. It can write any file it can reach and
+run any command with no confirmation step. Two things follow: the blast-radius
+halt is the *only* thing standing between the run and a remote or destructive
+operation, so never treat it as advisory; and a custom `[providers.<name>]`
+template must carry its own CLI's bypass, or that stage hangs on its first
+prompt. See [executors.md](references/executors.md).
+
 **Every failure is repairable by default.** Read
 [recovery-loop.md](references/recovery-loop.md) in full the moment anything
 exits non-zero. An intermediate failure stays inside the phase action: it does

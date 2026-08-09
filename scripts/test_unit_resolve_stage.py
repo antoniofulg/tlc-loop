@@ -73,7 +73,11 @@ class CodexCommandLine(ResolveCase):
         line = self.resolve_cmd(
             "--stage", "implement", "--prompt", "do the work", "--evidence", "/tmp/e.txt"
         )
-        self.assertIn("codex exec -m gpt-5.6-luna", line)
+        # Two checks rather than one substring: T44 put the approval bypass
+        # between `exec` and `-m`, and the subcommand and the model flag are
+        # separate claims that should fail separately.
+        self.assertIn("cmd=codex exec ", line)
+        self.assertIn("-m gpt-5.6-luna", line)
         self.assertIn("-c model_reasoning_effort=max", line)
 
     def test_the_evidence_file_is_captured_with_output_last_message(self):
@@ -114,6 +118,77 @@ class CursorCommandLine(ResolveCase):
         proc = self.run_resolve("--stage", "implement", "--prompt", "go")
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("tier suffix", proc.stderr)
+
+
+class NonInteractiveDispatch(ResolveCase):
+    """T44 / LOOP-05: no `command` executor may stop for an approval prompt.
+
+    Derived from T44's "Done when": each command provider carries the argument
+    that makes it non-interactive, and none of them leans on a setting in the
+    user's own configuration to get there. Only cursor was pinned before, which
+    is how two providers shipped for six rounds with no bypass at all - working
+    on one machine because `~/.codex/config.toml` happened to say
+    `approval_policy = "never"`.
+
+    The expected values are written out here rather than read from the
+    resolver: a test that asserts a table against itself pins nothing.
+    """
+
+    #: Provider to the argument its own `--help` documents for this.
+    #: `codex exec --help`: `--dangerously-bypass-approvals-and-sandbox`.
+    #: `claude --help`: `--dangerously-skip-permissions`.
+    #: `cursor-agent --help`: `-f, --force`.
+    EXPECTED = {
+        "claude": "--dangerously-skip-permissions",
+        "codex": "--dangerously-bypass-approvals-and-sandbox",
+        "cursor": "--force",
+    }
+
+    def resolve_for(self, provider, config):
+        self.write_config(config)
+        # A harness that is none of the three, so every provider takes the
+        # `command` path rather than resolving to the native agent.
+        return self.resolve_cmd(
+            "--stage", "implement", "--prompt", "go", "--evidence", "/tmp/e.txt",
+            harness="not-a-provider",
+        )
+
+    def test_every_builtin_command_provider_pins_its_argument_here(self):
+        # The pin that would have caught this: a provider added to the resolver
+        # without a non-interactive argument fails before it can be dispatched.
+        self.assertEqual(sorted(resolve_stage.BUILTIN), sorted(self.EXPECTED))
+
+    def test_every_builtin_command_provider_passes_its_argument(self):
+        for provider, flag in sorted(self.EXPECTED.items()):
+            with self.subTest(provider=provider):
+                line = self.resolve_for(
+                    provider,
+                    f'[stages.implement]\nprovider = "{provider}"\n'
+                    'model = "m"\neffort = "high"\n',
+                )
+                self.assertIn("kind=command", line)
+                self.assertIn(flag, line)
+
+    def test_the_argument_does_not_depend_on_a_model_or_an_effort(self):
+        # A stage naming only a provider is the smallest legal config. If the
+        # bypass rides an optional flag, that config prompts at 3am.
+        for provider, flag in sorted(self.EXPECTED.items()):
+            with self.subTest(provider=provider):
+                line = self.resolve_for(
+                    provider, f'[stages.implement]\nprovider = "{provider}"\n'
+                )
+                self.assertIn(flag, line)
+
+    def test_a_custom_provider_is_the_operators_own_responsibility(self):
+        # The loop has no catalogue for a declared CLI, so it cannot know that
+        # CLI's bypass argument. The template is substituted as written.
+        line = self.resolve_for(
+            "myagent",
+            '[stages.implement]\nprovider = "myagent"\n'
+            '[providers.myagent]\nkind = "command"\n'
+            'command = "myagent run --yes --out {evidence}"\n',
+        )
+        self.assertIn("myagent run --yes", line)
 
 
 class ClaudeCommandLine(ResolveCase):

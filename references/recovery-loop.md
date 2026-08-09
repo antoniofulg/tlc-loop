@@ -117,9 +117,13 @@ a question and a hang are the same event. Recording the halt leaves the run
 resumable the moment a human reads the reason; a prompt leaves a process
 sitting on a pipe until someone kills it.
 
-The same logic is why every `command` executor runs with approvals disabled:
-auto-approval is a precondition the operator accepted deliberately, so the only
-safe place to stop is at the phase boundary, in the phase vocabulary.
+The same logic is why the loop passes every built-in `command` executor its own
+approval bypass - `--dangerously-skip-permissions`,
+`--dangerously-bypass-approvals-and-sandbox`, `--force` - rather than leaving it
+to the operator's configuration. A dispatched executor therefore runs with no
+approval guardrail at all, by design; the only safe place to stop is at the
+phase boundary, in the phase vocabulary. The blast radius that buys is spelled
+out in [providers.md](providers.md).
 
 ---
 

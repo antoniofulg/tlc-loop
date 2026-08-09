@@ -72,6 +72,36 @@ evidence is re-collected, or the lane is re-run.
 
 ---
 
+## A `command` executor is launched with no approval guardrail
+
+Every built-in `command` executor is spawned with its approval prompts
+disabled, by the loop itself, on every invocation:
+`--dangerously-skip-permissions` for claude,
+`--dangerously-bypass-approvals-and-sandbox` for codex, `--force` for cursor.
+codex additionally runs unsandboxed.
+
+This is deliberate and it is the price of unattended execution. Nobody is at
+the keyboard, so an executor that stops to ask does not get an answer - it
+hangs, produces nothing, and the run stalls until a human notices hours later.
+That is the failure mode this skill exists to remove, so the prompt is removed
+instead.
+
+What it means in practice: a dispatched executor can write any file it can
+reach and run any command, with no confirmation step. Its blast radius is the
+machine it runs on. Point the loop at a repository and a machine where that is
+acceptable.
+
+The two rules above are what keep it bounded anyway - it never commits, and
+nothing it says is believed without an artifact - and a genuinely dangerous
+operation still **halts** rather than being auto-approved. The bypass buys
+non-interactivity; it is not authorization. See
+[providers.md](providers.md), "Blast radius".
+
+A custom `[providers.<name>]` template gets no bypass from the loop, which has
+no catalogue for it. Whoever writes the template supplies the flag.
+
+---
+
 ## The payload
 
 Every payload carries a common envelope, then the role-specific part.

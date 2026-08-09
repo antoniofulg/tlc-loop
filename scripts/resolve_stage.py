@@ -12,7 +12,7 @@ spawns the process owns the clock: `loop.sh` for the respawn it starts itself,
 and the agent for a stage it dispatches. The field rides the resolved line so
 neither has to go read the config to find it.
 
-Two rules it enforces before anything can be run:
+Three rules it enforces before anything can be run:
 
 * **A provider equal to the running harness resolves to `kind=agent`**
   (LOOP-05 AC 3). Spawning a second CLI to do work the harness can delegate
@@ -22,6 +22,11 @@ Two rules it enforces before anything can be run:
   `-c model_reasoning_effort=definitely_bogus_value` without complaint and
   fails only at the API, so the loop cannot rely on providers to catch their
   own bad input (LOOP-05 AC 2).
+* **Every built-in `command` line carries its provider's approval bypass**
+  (`NON_INTERACTIVE` below). This deliberately removes a safety guardrail:
+  with nobody watching, an approval prompt and a hang are the same event.
+  Relying on the operator's own global configuration instead makes the skill
+  work on one machine and stall on every other.
 
 Usage:
     resolve_stage.py --stage implement [--feature F] [--root DIR]
@@ -68,13 +73,25 @@ PROVIDER_EFFORTS = {
 #: plus an explicit effort is contradictory, and which wins is not guessable.
 CURSOR_TIER_SUFFIXES = ("-low", "-medium", "-high", "-xhigh", "-max", "-extra-high")
 
+#: The argument each built-in provider needs to run without stopping for an
+#: approval prompt, from that CLI's own `--help`. Passed unconditionally: a
+#: dispatched executor has nobody to answer a prompt, so a prompt and a hang
+#: are the same event, and an approval the operator set globally is a property
+#: of one machine rather than of the skill. Every entry here disables a real
+#: safety guardrail - see `references/providers.md`, "Blast radius".
+NON_INTERACTIVE = {
+    "claude": "--dangerously-skip-permissions",
+    "codex": "--dangerously-bypass-approvals-and-sandbox",
+    "cursor": "--force",
+}
+
 
 class ResolveError(Exception):
     """The configuration cannot be turned into something runnable."""
 
 
 def _claude_argv(model, effort, ctx):
-    argv = ["claude", "-p", ctx["prompt"]]
+    argv = ["claude", "-p", ctx["prompt"], NON_INTERACTIVE["claude"]]
     if model:
         argv += ["--model", model]
     if effort:
@@ -83,7 +100,7 @@ def _claude_argv(model, effort, ctx):
 
 
 def _codex_argv(model, effort, ctx):
-    argv = ["codex", "exec"]
+    argv = ["codex", "exec", NON_INTERACTIVE["codex"]]
     if model:
         argv += ["-m", model]
     if effort:
@@ -92,7 +109,7 @@ def _codex_argv(model, effort, ctx):
 
 
 def _cursor_argv(model, effort, ctx):
-    argv = ["cursor-agent", "-p", ctx["prompt"], "--force"]
+    argv = ["cursor-agent", "-p", ctx["prompt"], NON_INTERACTIVE["cursor"]]
     if model:
         # Bracket syntax, never `{model}-{effort}`: tier suffixes are
         # per-model, so a synthesised id is often one that does not exist.

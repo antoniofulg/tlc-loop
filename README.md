@@ -172,6 +172,17 @@ the moment a human reads it.
 
 Stated plainly, because finding these yourself at 3am is worse.
 
+- **A dispatched provider CLI runs with its approval prompts turned off.** The
+  loop passes `--dangerously-skip-permissions` to claude,
+  `--dangerously-bypass-approvals-and-sandbox` to codex (which also disables
+  its sandbox), and `--force` to cursor — always, on every invocation. It has
+  to: nobody is there to answer a prompt, so an executor that asks just hangs
+  until morning. The consequence is real, so it is stated rather than buried:
+  an executor can write any file it can reach and run any command, with no
+  confirmation step. Run the loop where that blast radius is acceptable — your
+  own worktree, a container, a throwaway machine — and not on a box you would
+  mind losing. A push, deploy, or other remote operation is a separate matter
+  and still halts for authorization rather than proceeding.
 - **The repair loop has never run in anger.** `references/recovery-loop.md` is
   instruction for the model, not code, and no real iteration has failed yet to
   exercise it. Start with a medium-sized feature.
