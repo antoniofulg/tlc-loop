@@ -23,12 +23,12 @@
 #
 # The one clock it owns: when the resolved line carries `timeout=<seconds>`
 # (`limits.executor_timeout_seconds`), a respawn that outlives it is killed.
-# `timeout(1)` is not portable - it is absent on macOS without coreutils - so
-# the watchdog is a backgrounded subshell. An expiry is an executor failure,
-# not a retry condition: it is recorded through `update_loop.py --halt
-# executor`, and the next detect turns that into the `phase=H` line the driver
-# already knows how to stop on. A hung provider CLI is otherwise silence until
-# somebody comes back and looks.
+# The driver does not hold that clock itself - `_spawn.py` does, because shell
+# job control is the wrong tool for it and two attempts here proved it. An
+# expiry is an executor failure, not a retry condition: it is recorded through
+# `update_loop.py --halt executor`, and the next detect turns that into the
+# `phase=H` line the driver already knows how to stop on. A hung provider CLI
+# is otherwise silence until somebody comes back and looks.
 #
 # Usage:
 #     loop.sh <feature> [--root DIR]
@@ -64,6 +64,7 @@ newline='
 
 # What a killed respawn reports. 124 is the value timeout(1) uses for the same
 # event, kept so the number means the same thing to anyone reading a transcript.
+# `_spawn.py` returns it; this is the driver's copy of the contract.
 TIMED_OUT=124
 
 usage() {
@@ -83,8 +84,15 @@ die() {
 }
 
 # Run a command string, killing it after $1 seconds. An empty $1 means
-# unlimited and runs it directly, which keeps the common path free of the
-# watchdog entirely. Returns the command's own status, or $TIMED_OUT.
+# unlimited: the command runs in the foreground of this shell, with no spawner
+# and no clock involved at all. Returns the command's own status, or $TIMED_OUT.
+#
+# A bound hands the command to `_spawn.py`, which runs it in a session of its
+# own and kills that whole session on expiry. Bash cannot do this correctly:
+# `set -m` makes the respawn a *background* job of the driver's terminal, the
+# kernel stops it with SIGTTIN the moment it reads that terminal, and a stopped
+# child is one `wait` never returns from. Two watchdogs were written here and
+# both were wrong. The third one is not written in bash.
 run_bounded() {
     bounded_secs=$1
     bounded_cmd=$2
@@ -96,48 +104,7 @@ run_bounded() {
         return $?
     fi
 
-    bounded_marker=$(mktemp "${TMPDIR:-/tmp}/tlc-loop-timeout-XXXXXX") || return 1
-
-    # Job control, so the respawn gets a process group of its own and the
-    # watchdog can signal the whole tree. `eval` is not a simple command, so
-    # bash runs it in a forked subshell and the provider CLI is that subshell's
-    # child: signalling the pid alone kills the wrapper and orphans the CLI,
-    # which then keeps running - and keeps holding the driver's stdout - which
-    # is the hang this exists to end. Restored immediately, so the watchdog
-    # below stays in the driver's own group and cannot be caught by its own kill.
-    set -m
-    eval "$bounded_cmd" &
-    bounded_pid=$!
-    set +m
-
-    # The marker is written before the kill, so the status the wait reports can
-    # be told apart from an ordinary non-zero exit. TERM is the polite ask, so
-    # a CLI that wants to flush its output can.
-    (
-        sleep "$bounded_secs"
-        printf 'timeout' >"$bounded_marker"
-        kill -TERM -"$bounded_pid" 2>/dev/null || kill -TERM "$bounded_pid" 2>/dev/null
-    ) &
-    bounded_watchdog=$!
-
-    wait "$bounded_pid"
-    bounded_status=$?
-
-    kill -TERM "$bounded_watchdog" 2>/dev/null
-    wait "$bounded_watchdog" 2>/dev/null
-
-    if [ -s "$bounded_marker" ]; then
-        # `wait` tracks only the direct child, and TERM is a request a process
-        # is free to ignore. Either way the wait can return while the provider
-        # CLI is still alive in the group, still burning quota and still
-        # holding the driver's stdout. KILL is not ignorable, so the sweep is
-        # what actually ends the hang - the escalation cannot be left to the
-        # watchdog, which has already been stopped by then.
-        kill -KILL -"$bounded_pid" 2>/dev/null
-        bounded_status=$TIMED_OUT
-    fi
-    rm -f "$bounded_marker"
-    return "$bounded_status"
+    python3 "${self_dir}/_spawn.py" --timeout "$bounded_secs" -- "$bounded_cmd"
 }
 
 # Record a halt through the single writer, then let detection report it. The

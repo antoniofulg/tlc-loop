@@ -5,19 +5,23 @@ Derived from the task's "Done when" criteria and LOOP-06: the driver breaks on
 respawn command on any other phase, and breaks rather than spinning on a line
 it cannot parse.
 
-T39 adds the executor timeout: a respawn that outlives
+T39 added the executor timeout: a respawn that outlives
 `limits.executor_timeout_seconds` is killed and the expiry recorded as an
 executor halt, so a hung provider CLI stops the run instead of holding it open
-until morning. `timeout(1)` is not portable - absent on macOS without
-coreutils - so the driver watchdogs the process itself, and these tests are the
-proof it works on this machine.
+until morning. T41 moved the clock itself into `scripts/_spawn.py`; what these
+tests own is the driver's half of it - that a bound is delegated, that an
+expiry becomes a halt, and that nothing outlives a respawn either way.
 
 `detect_phase`, `resolve_stage` and `update_loop` are stubbed. The driver never
 runs a real provider CLI here and makes no network call: the "provider" is a
 `/bin/sh -c` one-liner that touches a marker file.
 """
 
+import glob
 import os
+import pty
+import select
+import signal
 import subprocess
 import tempfile
 import time
@@ -94,8 +98,8 @@ class LoopShTestCase(unittest.TestCase):
         os.chmod(path, 0o755)
         return path
 
-    def run_loop(self, steps, resolve_out=None, resolve_code=0, update_code=0):
-        """Run loop.sh against the stubs and return the CompletedProcess."""
+    def stub_env(self, steps, resolve_out=None, resolve_code=0, update_code=0):
+        """The environment that points loop.sh at the stubs."""
         if resolve_out is None:
             resolve_out = (
                 "kind=command provider=stub cmd=/bin/sh -c "
@@ -116,11 +120,15 @@ class LoopShTestCase(unittest.TestCase):
                 "STUB_UPDATE_CODE": str(update_code),
             }
         )
+        return env
+
+    def run_loop(self, steps, resolve_out=None, resolve_code=0, update_code=0):
+        """Run loop.sh against the stubs and return the CompletedProcess."""
         return subprocess.run(
             ["bash", LOOP_SH, "demo", "--root", self.root],
             capture_output=True,
             text=True,
-            env=env,
+            env=self.stub_env(steps, resolve_out, resolve_code, update_code),
             timeout=60,
         )
 
@@ -318,13 +326,15 @@ class TestExecutorTimeout(LoopShTestCase):
 
     `limits.executor_timeout_seconds` arrives on the resolved line as
     `timeout=<seconds>`. A hung provider CLI is not an error and not a halt - it
-    is silence - so the driver has to be the one holding the clock.
+    is silence - so something has to hold the clock. Since T41 that is
+    `_spawn.py`; these tests assert the outcome the driver promises, whichever
+    side of the boundary produces it.
     """
 
-    #: Two levels deep on purpose. `eval` runs in a forked subshell, so the
-    #: provider CLI is that subshell's child; signalling the pid alone leaves
-    #: the CLI orphaned and still holding the driver's stdout. Reading this run
-    #: to EOF is therefore a direct test of whether the whole tree died.
+    #: Two levels deep on purpose. The shell the spawner starts is not the
+    #: provider CLI, it is the CLI's parent; signalling the pid alone leaves the
+    #: CLI orphaned and still holding the driver's stdout. Reading this run to
+    #: EOF is therefore a direct test of whether the whole tree died.
     HANG = "kind=command provider=stub timeout=1 cmd=/bin/sh -c 'sleep 40'"
 
     def test_a_respawn_that_outlives_the_timeout_is_killed(self):
@@ -448,6 +458,93 @@ class TestExecutorTimeout(LoopShTestCase):
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertEqual(self.spawns(), 1)
 
+    def test_an_unbounded_respawn_runs_in_the_drivers_own_process_group(self):
+        # "Unlimited" is not only "it still runs": with no bound there is no
+        # spawner in the way, so the respawn stays in the foreground group it
+        # would need to read a terminal. A bound is what moves it out.
+        pgid_file = os.path.join(self.root, "pgid.txt")
+        record = (
+            "kind=command provider=stub cmd=/bin/sh -c "
+            "'ps -o pgid= -p $$ > %s'" % pgid_file
+        )
+
+        run = self.run_loop(
+            [
+                "phase=B action=execute_batch batch=P1 tasks=T1",
+                "phase=E action=done",
+            ],
+            resolve_out=record,
+        )
+        with open(pgid_file) as handle:
+            unbounded = handle.read().strip()
+
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(int(unbounded), os.getpgid(0))
+
+    def test_a_bounded_respawn_runs_in_a_group_of_its_own(self):
+        pgid_file = os.path.join(self.root, "pgid.txt")
+        record = (
+            "kind=command provider=stub timeout=30 cmd=/bin/sh -c "
+            "'ps -o pgid= -p $$ > %s'" % pgid_file
+        )
+
+        run = self.run_loop(
+            [
+                "phase=B action=execute_batch batch=P1 tasks=T1",
+                "phase=E action=done",
+            ],
+            resolve_out=record,
+        )
+        with open(pgid_file) as handle:
+            bounded = handle.read().strip()
+
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertNotEqual(
+            int(bounded),
+            os.getpgid(0),
+            "a bounded respawn shares the driver's group, so a kill cannot "
+            "single it out",
+        )
+
+    def test_a_respawn_inside_its_bound_leaves_nothing_behind(self):
+        # The bound is 300s and the respawn takes milliseconds. Anything the
+        # driver started to enforce that bound must be gone when the run ends:
+        # a leftover holds the driver's stdout open for the full 300 seconds,
+        # so `capture_output` - which reads to EOF - is the detector.
+        started = time.monotonic()
+        run = self.run_loop(
+            [
+                "phase=B action=execute_batch batch=P1 tasks=T1",
+                "phase=E action=done",
+            ],
+            resolve_out=(
+                "kind=command provider=stub timeout=300 cmd=/bin/sh -c "
+                "'printf x >> %s'" % self.marker
+            ),
+        )
+        elapsed = time.monotonic() - started
+
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(self.spawns(), 1)
+        self.assertLess(elapsed, 20, "something outlived the respawn")
+        self.assertEqual(self.survivors("sleep 300"), "")
+
+    def test_an_expiry_leaves_no_temp_file_behind(self):
+        pattern = os.path.join(
+            os.environ.get("TMPDIR", "/tmp"), "tlc-loop-timeout-*"
+        )
+        before = set(glob.glob(pattern))
+
+        self.run_loop(
+            [
+                "phase=B action=execute_batch batch=P1 tasks=T1",
+                'phase=H action=halt reason=executor detail="killed"',
+            ],
+            resolve_out=self.HANG,
+        )
+
+        self.assertEqual(set(glob.glob(pattern)) - before, set())
+
     def test_a_halt_that_cannot_be_recorded_breaks_rather_than_spinning(self):
         run = self.run_loop(
             [
@@ -460,6 +557,97 @@ class TestExecutorTimeout(LoopShTestCase):
 
         self.assertEqual(run.returncode, 2)
         self.assertEqual(self.detect_calls(), 1, "an unrecordable halt must not loop")
+
+
+class TestRespawnThatReadsTheTerminal(LoopShTestCase):
+    """The blocker round 5 reproduced, driven through the real driver.
+
+    Both preconditions are the project's own instructions: run `loop.sh` from a
+    terminal, with `executor_timeout_seconds` set. A respawn that then reads
+    that terminal used to stop on `SIGTTIN`, which the driver's `wait` never
+    returned from - a 20 second bound ran two minutes and was still going, with
+    no halt recorded. A pty is the only place that shows up.
+    """
+
+    #: Reads the terminal, then would hold it for ten minutes. `sleep 601` is
+    #: what `pgrep` looks for afterwards.
+    READS_TTY = (
+        "kind=command provider=stub timeout=2 cmd=/bin/sh -c "
+        "'printf READY; head -c 1 >/dev/null; sleep 601'"
+    )
+
+    def run_loop_under_a_pty(self, steps, resolve_out, deadline=45):
+        """Run loop.sh as a session leader with a controlling terminal."""
+        env = self.stub_env(steps, resolve_out)
+        pid, fd = pty.fork()
+        if pid == 0:  # pragma: no cover - replaced by execve
+            try:
+                os.execve(
+                    "/bin/bash", ["bash", LOOP_SH, "demo", "--root", self.root], env
+                )
+            finally:
+                os._exit(127)
+        chunks = []
+        status = None
+        end = time.monotonic() + deadline
+        while time.monotonic() < end:
+            ready, _, _ = select.select([fd], [], [], 0.2)
+            if ready:
+                try:
+                    data = os.read(fd, 4096)
+                except OSError:
+                    data = b""
+                if data:
+                    chunks.append(data)
+                    continue
+            reaped, wait_status = os.waitpid(pid, os.WNOHANG)
+            if reaped:
+                status = wait_status
+                break
+        os.close(fd)
+        if status is None:
+            os.kill(pid, signal.SIGKILL)
+            os.waitpid(pid, 0)
+        return b"".join(chunks).decode(errors="replace"), status
+
+    def test_the_driver_stops_instead_of_hanging_on_a_terminal_read(self):
+        self.addCleanup(subprocess.run, ["pkill", "-f", "sleep 601"],
+                        capture_output=True)
+        started = time.monotonic()
+
+        output, status = self.run_loop_under_a_pty(
+            [
+                "phase=B action=execute_batch batch=P1 tasks=T1",
+                'phase=H action=halt reason=executor detail="killed"',
+            ],
+            self.READS_TTY,
+        )
+        elapsed = time.monotonic() - started
+
+        self.assertIsNotNone(
+            status, "the driver never exited: the terminal read hung it"
+        )
+        self.assertIn("READY", output, "the respawn never reached the terminal")
+        self.assertLess(elapsed, 40, "the bound was not enforced under a pty")
+        self.assertEqual(os.waitstatus_to_exitcode(status), 1, output)
+        self.assertIn("phase=H action=halt reason=executor", output)
+        self.assertEqual(self.survivors("sleep 601"), "")
+
+    def test_the_expiry_under_a_pty_is_still_recorded_as_an_executor_halt(self):
+        self.addCleanup(subprocess.run, ["pkill", "-f", "sleep 601"],
+                        capture_output=True)
+
+        self.run_loop_under_a_pty(
+            [
+                "phase=B action=execute_batch batch=P1 tasks=T1",
+                'phase=H action=halt reason=executor detail="killed"',
+            ],
+            self.READS_TTY,
+        )
+
+        recorded = self.recorded_updates()
+        self.assertEqual(len(recorded), 1, recorded)
+        self.assertIn("--halt executor", recorded[0])
 
 
 class TestSyntax(unittest.TestCase):

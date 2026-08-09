@@ -96,6 +96,17 @@ T21 -> T23
 T24
 ```
 
+### Phase 13: Retire the bash watchdog
+
+Round 5 found the timeout deadlocks the driver on a real terminal, which is
+worse than having no timeout at all. Two bash attempts, two different job-control
+bugs. The stdlib already does this correctly.
+
+```
+T41 -> T43
+T42
+```
+
 ### Phase 12: Overnight stability
 
 What a run left alone all night actually needs. Found by auditing every config
@@ -1370,6 +1381,84 @@ T30
 - [x] `LICENSE` holds the full CC BY 4.0 text, matching what `README.md` and the `SKILL.md` frontmatter declare
 - [x] The three statements of the licence agree with each other
 - [x] The attribution names the work and its origin, so a reuser knows what to credit
+
+**Tests**: none
+**Gate**: build
+
+---
+
+### T41: Spawn bounded processes from Python, not bash job control ✅
+
+**What**: Replace `loop.sh`'s hand-rolled watchdog with a stdlib Python spawner, removing the job-control code entirely.
+**Where**: `scripts/_spawn.py`
+**Depends on**: None
+**Reuses**: `subprocess.run(timeout=)` and `os.killpg`, both stdlib.
+**Requirement**: LOOP-06
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [x] A bounded command runs to completion under its limit and returns the child's own exit code
+- [x] A command that outlives the limit is terminated, and its whole process group with it, so nothing survives
+- [x] A child that ignores `SIGTERM` is still killed
+- [x] A child that reads a terminal does not stop and deadlock the caller - the failure round 5 reproduced
+- [x] An absent limit means unlimited, and the command runs in the foreground with no watchdog at all
+- [x] Expiry is reported distinguishably from an ordinary non-zero exit, so `loop.sh` can record `--halt executor`
+- [x] `loop.sh` no longer contains `set -m`, a background watchdog subshell, or a marker file, and delegates the bound entirely
+- [x] Tests assert no surviving process after each case, by `pgrep`, and cover the terminal-reading child
+
+**Tests**: unit
+**Gate**: full
+
+---
+
+### T42: Sweep the mechanism descriptions T38 did not reach
+
+**What**: Update the places that describe the pre-T37 no-diff mechanism, which the phrasing scanner cannot see.
+**Where**: `references/phase-transitions.md`
+**Depends on**: None
+**Reuses**: The corrected contract already in `checkpoint.py` and `state-schema.md`.
+**Requirement**: LOOP-02
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [ ] `references/phase-transitions.md` describes the empty-commit contract, not "therefore no trailer", and its Phase B exit rule no longer rests on `no_diff_tasks`
+- [ ] `scripts/test_int_end_to_end.py` and `.gitignore` no longer restate the retracted claim
+- [ ] The scanner from T38 is extended to catch a mechanism description, not only a phrasing, so this does not recur a fourth time
+- [ ] Every remaining mention of `no_diff_tasks` describes it as a legacy field that is read and never written
+
+**Tests**: unit
+**Gate**: quick
+
+---
+
+### T43: Say what the executor halt now covers
+
+**What**: Document the timeout kill as a cause of `reason=executor`, and clean up the marker file's lifetime.
+**Where**: `README.md`
+**Depends on**: T41
+**Reuses**: The halt table already in `README.md`.
+**Requirement**: LOOP-06
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [ ] `README.md`'s `executor` row names a timed-out provider alongside the missing, unauthenticated, and out-of-quota cases
+- [ ] Any temporary file `loop.sh` still creates is removed on every exit path, including a signal
+- [ ] The halt-reason parity test still passes with the reworded row
 
 **Tests**: none
 **Gate**: build
