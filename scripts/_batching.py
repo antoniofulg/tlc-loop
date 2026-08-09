@@ -26,41 +26,57 @@ COARSE_FACTOR = 1.5
 
 
 def _group_by_phase(tasks):
-    """Ordered {phase: [task ids]}, phases in first-appearance order."""
+    """Ordered phase groups with task ids and one effective stage each."""
     grouped = {}
     for task in tasks:
-        grouped.setdefault(task["phase"], []).append(task["id"])
+        phase = task["phase"]
+        stage = task.get("effective_stage") or "implement"
+        group = grouped.setdefault(phase, {"tasks": [], "stage": stage})
+        if group["stage"] != stage:
+            raise ValueError(
+                f"phase {phase} mixes effective stages {group['stage']!r} and {stage!r}"
+            )
+        group["tasks"].append(task["id"])
     return grouped
 
 
 def pack(tasks, budget=7):
     """Return `(batches, oversized_phases)`.
 
-    Each batch is `{"phases": [...], "tasks": [...]}` holding consecutive whole
-    phases. `oversized_phases` lists phases larger than 1.5x the budget, which
-    are flagged rather than split.
+    Each batch is `{"phases": [...], "tasks": [...], "stage": name}` holding
+    consecutive whole phases with one effective stage. `oversized_phases` lists
+    phases larger than 1.5x the budget, which are flagged rather than split.
     """
     grouped = _group_by_phase(tasks)
     cap = COARSE_FACTOR * budget
-    oversized = [phase for phase, ids in grouped.items() if len(ids) > cap]
+    oversized = [
+        phase for phase, group in grouped.items() if len(group["tasks"]) > cap
+    ]
 
     batches = []
     current = None
-    for phase, ids in grouped.items():
+    for phase, group in grouped.items():
+        ids, stage = group["tasks"], group["stage"]
         if current is not None and (
-            len(current["tasks"]) >= budget or len(current["tasks"]) + len(ids) > cap
+            current["stage"] != stage
+            or len(current["tasks"]) >= budget
+            or len(current["tasks"]) + len(ids) > cap
         ):
             batches.append(current)
             current = None
         if current is None:
-            current = {"phases": [], "tasks": []}
+            current = {"phases": [], "tasks": [], "stage": stage}
         current["phases"].append(phase)
         current["tasks"] += ids
     if current is not None:
         batches.append(current)
 
     # A lone tail of one or two tasks is not worth its own worker.
-    if len(batches) > 1 and len(batches[-1]["tasks"]) <= 2:
+    if (
+        len(batches) > 1
+        and len(batches[-1]["tasks"]) <= 2
+        and batches[-1]["stage"] == batches[-2]["stage"]
+    ):
         tail = batches.pop()
         batches[-1]["phases"] += tail["phases"]
         batches[-1]["tasks"] += tail["tasks"]

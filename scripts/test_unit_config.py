@@ -36,6 +36,7 @@ class AbsentFile(unittest.TestCase):
             cfg = _config.load_config(root)
             self.assertEqual(cfg["version"], 1)
             self.assertEqual(cfg["execute"]["batch_size"], 7)
+            self.assertIs(cfg["execute"]["strict_routing"], False)
             self.assertIsNone(cfg["verify"]["max_rounds"])
             self.assertEqual(cfg["continue"]["mode"], "auto")
             self.assertNotIn("in_turn", cfg["continue"])
@@ -125,6 +126,12 @@ class PartialFile(unittest.TestCase):
             )
             self.assertIsNone(cfg["verify"]["max_rounds"])
 
+    def test_strict_routing_reads_real_toml_booleans(self):
+        for raw, expected in (("true", True), ("false", False)):
+            with self.subTest(raw=raw), tempfile.TemporaryDirectory() as root:
+                _write(root, f"[execute]\nstrict_routing = {raw}\n")
+                self.assertIs(_config.load_config(root)["execute"]["strict_routing"], expected)
+
     def test_a_partially_specified_stage_keeps_the_other_stage_defaults(self):
         with tempfile.TemporaryDirectory() as root:
             _write(root, '[stages.verify]\nprovider = "claude"\n')
@@ -158,6 +165,15 @@ class MalformedFile(unittest.TestCase):
             self.assertIn(path, message)
             # the underlying tomllib parse error is surfaced, not swallowed
             self.assertRegex(message, r"line \d+|Expected|Invalid|closing")
+
+    def test_strict_routing_rejects_non_boolean_values(self):
+        for raw in ('"false"', "0", "1"):
+            with self.subTest(raw=raw), tempfile.TemporaryDirectory() as root:
+                _write(root, f"[execute]\nstrict_routing = {raw}\n")
+                with self.assertRaisesRegex(
+                    _config.ConfigError, "execute.strict_routing.*boolean"
+                ):
+                    _config.load_config(root)
 
 
 class EffortValidation(unittest.TestCase):

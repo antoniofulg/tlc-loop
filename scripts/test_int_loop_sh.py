@@ -196,7 +196,7 @@ class TestSpawn(LoopShTestCase):
     def test_spawns_once_then_terminates(self):
         run = self.run_loop(
             [
-                "phase=B action=execute_batch batch=P1 tasks=T1,T2",
+                "phase=B action=execute_batch batch=P1 tasks=T1,T2 stage=implement",
                 "phase=E action=done",
             ]
         )
@@ -205,14 +205,17 @@ class TestSpawn(LoopShTestCase):
         self.assertEqual(self.spawns(), 1, "exactly one respawn between the two detects")
         self.assertEqual(self.resolve_calls(), 1)
         self.assertEqual(self.detect_calls(), 2)
-        self.assertIn("phase=B action=execute_batch batch=P1 tasks=T1,T2", run.stdout)
+        self.assertIn(
+            "phase=B action=execute_batch batch=P1 tasks=T1,T2 stage=implement",
+            run.stdout,
+        )
         self.assertIn("phase=E action=done", run.stdout)
 
     def test_spawns_for_every_non_terminal_phase(self):
         run = self.run_loop(
             [
                 "phase=0 action=bootstrap",
-                "phase=B action=execute_batch batch=P1 tasks=T1",
+                "phase=B action=execute_batch batch=P1 tasks=T1 stage=implement",
                 "phase=V action=verify round=1",
                 "phase=F action=fix round=1",
                 "phase=E action=done",
@@ -239,7 +242,8 @@ class TestSpawn(LoopShTestCase):
                 "LOOP_DETECT_CMD": "python3 %s" % self.detect_stub,
                 "LOOP_RESOLVE_CMD": "python3 %s" % stub,
                 "STUB_DETECT_COUNTER": self.detect_counter,
-                "STUB_DETECT_STEPS": "phase=B action=execute_batch batch=P1 tasks=T1"
+                "STUB_DETECT_STEPS": "phase=B action=execute_batch batch=P1 "
+                "tasks=T1 stage=implement"
                 "||phase=E action=done",
                 "STUB_ARGV": argv_file,
             }
@@ -259,7 +263,7 @@ class TestSpawn(LoopShTestCase):
 
     def test_a_respawn_with_no_command_breaks(self):
         run = self.run_loop(
-            ["phase=B action=execute_batch batch=P1 tasks=T1"],
+            ["phase=B action=execute_batch batch=P1 tasks=T1 stage=implement"],
             resolve_out="kind=agent provider=claude model=opus effort=high",
         )
 
@@ -302,7 +306,7 @@ class TestBreaksRatherThanSpinning(LoopShTestCase):
 
     def test_a_failing_respawn_breaks(self):
         run = self.run_loop(
-            ["phase=B action=execute_batch batch=P1 tasks=T1"],
+            ["phase=B action=execute_batch batch=P1 tasks=T1 stage=implement"],
             resolve_out="kind=command provider=stub cmd=/bin/sh -c 'exit 3'",
         )
 
@@ -312,7 +316,7 @@ class TestBreaksRatherThanSpinning(LoopShTestCase):
 
     def test_a_failing_resolver_breaks(self):
         run = self.run_loop(
-            ["phase=B action=execute_batch batch=P1 tasks=T1"],
+            ["phase=B action=execute_batch batch=P1 tasks=T1 stage=implement"],
             resolve_code=2,
         )
 
@@ -341,7 +345,7 @@ class TestExecutorTimeout(LoopShTestCase):
         started = time.monotonic()
         run = self.run_loop(
             [
-                "phase=B action=execute_batch batch=P1 tasks=T1",
+                "phase=B action=execute_batch batch=P1 tasks=T1 stage=implement",
                 'phase=H action=halt reason=executor detail="killed"',
             ],
             resolve_out=self.HANG,
@@ -358,7 +362,7 @@ class TestExecutorTimeout(LoopShTestCase):
         started = time.monotonic()
         self.run_loop(
             [
-                "phase=B action=execute_batch batch=P1 tasks=T1",
+                "phase=B action=execute_batch batch=P1 tasks=T1 stage=implement",
                 'phase=H action=halt reason=executor detail="killed"',
             ],
             resolve_out=self.HANG,
@@ -374,7 +378,7 @@ class TestExecutorTimeout(LoopShTestCase):
         started = time.monotonic()
         run = self.run_loop(
             [
-                "phase=B action=execute_batch batch=P1 tasks=T1",
+                "phase=B action=execute_batch batch=P1 tasks=T1 stage=implement",
                 'phase=H action=halt reason=executor detail="killed"',
             ],
             resolve_out=(
@@ -390,7 +394,7 @@ class TestExecutorTimeout(LoopShTestCase):
     def test_the_expiry_is_recorded_as_an_executor_halt(self):
         self.run_loop(
             [
-                "phase=B action=execute_batch batch=P1 tasks=T1",
+                "phase=B action=execute_batch batch=P1 tasks=T1 stage=implement",
                 'phase=H action=halt reason=executor detail="killed"',
             ],
             resolve_out=self.HANG,
@@ -407,7 +411,7 @@ class TestExecutorTimeout(LoopShTestCase):
         # lets the next detect print it, so the last stdout line is a phase line.
         run = self.run_loop(
             [
-                "phase=B action=execute_batch batch=P1 tasks=T1",
+                "phase=B action=execute_batch batch=P1 tasks=T1 stage=implement",
                 'phase=H action=halt reason=executor detail="killed"',
             ],
             resolve_out=self.HANG,
@@ -422,7 +426,7 @@ class TestExecutorTimeout(LoopShTestCase):
     def test_a_respawn_inside_the_timeout_runs_untouched(self):
         run = self.run_loop(
             [
-                "phase=B action=execute_batch batch=P1 tasks=T1",
+                "phase=B action=execute_batch batch=P1 tasks=T1 stage=implement",
                 "phase=E action=done",
             ],
             resolve_out=(
@@ -438,7 +442,7 @@ class TestExecutorTimeout(LoopShTestCase):
     def test_a_failing_respawn_inside_the_timeout_still_breaks(self):
         # The watchdog must not swallow the command's own exit status.
         run = self.run_loop(
-            ["phase=B action=execute_batch batch=P1 tasks=T1"],
+            ["phase=B action=execute_batch batch=P1 tasks=T1 stage=implement"],
             resolve_out="kind=command provider=stub timeout=30 cmd=/bin/sh -c 'exit 3'",
         )
 
@@ -450,7 +454,7 @@ class TestExecutorTimeout(LoopShTestCase):
         # The default resolve_out carries no `timeout=`, and the respawn runs.
         run = self.run_loop(
             [
-                "phase=B action=execute_batch batch=P1 tasks=T1",
+                "phase=B action=execute_batch batch=P1 tasks=T1 stage=implement",
                 "phase=E action=done",
             ]
         )
@@ -470,7 +474,7 @@ class TestExecutorTimeout(LoopShTestCase):
 
         run = self.run_loop(
             [
-                "phase=B action=execute_batch batch=P1 tasks=T1",
+                "phase=B action=execute_batch batch=P1 tasks=T1 stage=implement",
                 "phase=E action=done",
             ],
             resolve_out=record,
@@ -490,7 +494,7 @@ class TestExecutorTimeout(LoopShTestCase):
 
         run = self.run_loop(
             [
-                "phase=B action=execute_batch batch=P1 tasks=T1",
+                "phase=B action=execute_batch batch=P1 tasks=T1 stage=implement",
                 "phase=E action=done",
             ],
             resolve_out=record,
@@ -514,7 +518,7 @@ class TestExecutorTimeout(LoopShTestCase):
         started = time.monotonic()
         run = self.run_loop(
             [
-                "phase=B action=execute_batch batch=P1 tasks=T1",
+                "phase=B action=execute_batch batch=P1 tasks=T1 stage=implement",
                 "phase=E action=done",
             ],
             resolve_out=(
@@ -537,7 +541,7 @@ class TestExecutorTimeout(LoopShTestCase):
 
         self.run_loop(
             [
-                "phase=B action=execute_batch batch=P1 tasks=T1",
+                "phase=B action=execute_batch batch=P1 tasks=T1 stage=implement",
                 'phase=H action=halt reason=executor detail="killed"',
             ],
             resolve_out=self.HANG,
@@ -548,7 +552,7 @@ class TestExecutorTimeout(LoopShTestCase):
     def test_a_halt_that_cannot_be_recorded_breaks_rather_than_spinning(self):
         run = self.run_loop(
             [
-                "phase=B action=execute_batch batch=P1 tasks=T1",
+                "phase=B action=execute_batch batch=P1 tasks=T1 stage=implement",
                 'phase=H action=halt reason=executor detail="killed"',
             ],
             resolve_out=self.HANG,
@@ -617,7 +621,7 @@ class TestRespawnThatReadsTheTerminal(LoopShTestCase):
 
         output, status = self.run_loop_under_a_pty(
             [
-                "phase=B action=execute_batch batch=P1 tasks=T1",
+                "phase=B action=execute_batch batch=P1 tasks=T1 stage=implement",
                 'phase=H action=halt reason=executor detail="killed"',
             ],
             self.READS_TTY,
@@ -639,7 +643,7 @@ class TestRespawnThatReadsTheTerminal(LoopShTestCase):
 
         self.run_loop_under_a_pty(
             [
-                "phase=B action=execute_batch batch=P1 tasks=T1",
+                "phase=B action=execute_batch batch=P1 tasks=T1 stage=implement",
                 'phase=H action=halt reason=executor detail="killed"',
             ],
             self.READS_TTY,
@@ -666,7 +670,10 @@ class TestTemporaryFiles(LoopShTestCase):
     def test_the_evidence_file_is_removed_when_the_driver_is_signalled(self):
         before = set(glob.glob(self.PATTERN))
         env = self.stub_env(
-            ["phase=B action=execute_batch batch=P1 tasks=T1", "phase=E action=done"],
+            [
+                "phase=B action=execute_batch batch=P1 tasks=T1 stage=implement",
+                "phase=E action=done",
+            ],
             resolve_out="kind=command provider=stub cmd=/bin/sh -c 'sleep 22'",
         )
         env["LOOP_EVIDENCE"] = ""

@@ -58,9 +58,15 @@ the run before it starts rather than being half-honoured hours in.
 
 ## `[stages.*]`
 
-Three stages exist: `implement`, `verify`, and `fix`. Each takes the same three
-keys, and each resolves independently. This is the table that lets a cheap
-implementer be paired with a high-reasoning verifier.
+`implement`, `verify`, and `fix` exist by default. Additional implementation
+stages such as `foundation`, `backend`, `frontend`, or `docs` may be declared
+with any lowercase kebab-case name. Each takes the same three keys and resolves
+independently.
+
+`verify`, `fix`, and `continue.respawn` are reserved runtime roles: a Tasks
+phase cannot select them through `**Stage:**`. `implement` is the compatibility
+fallback for a phase with no declaration when `execute.strict_routing` is
+false. See [tasks-routing-contract.md](tasks-routing-contract.md).
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -93,6 +99,15 @@ effort = "high"
 provider = "codex"
 model = "gpt-5.6-luna"
 effort = "max"
+
+[stages.backend]
+provider = "codex"
+model = "gpt-5.6-luna"
+effort = "high"
+
+[stages.frontend]
+provider = "cursor"
+model = "composer-2.5"
 ```
 
 ---
@@ -102,11 +117,17 @@ effort = "max"
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `batch_size` | integer | `7` | Task budget per batch. Phases are packed into batches up to this many tasks, and a phase is never split across batches. |
+| `strict_routing` | boolean | `false` | Require every Tasks phase to declare `**Stage:**`. When false, a missing declaration routes to `implement`; an invalid explicit declaration is always rejected. |
 
 ```toml
 [execute]
 batch_size = 7
+strict_routing = false
 ```
+
+A stage change closes the current batch even when the task budget has room.
+The loop never mixes effective stages in one batch, and tail folding applies
+only when both batches use the same stage.
 
 ---
 

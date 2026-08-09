@@ -1,6 +1,6 @@
 ---
 name: tlc-loop
-description: Unattended execution loop for an approved tlc-spec-driven tasks.md: detects the phase from git commit trailers, dispatches batches to per-stage configurable providers, commits each task atomically, repairs its own failures, and halts with a recorded reason instead of stalling. Use when running a formal tasks.md to a verified PASS without per-batch prompting, or resuming a run that was interrupted. Another skill reaches it when tlc-spec-driven delegates Execute to loop mode. Triggers on "run the loop" and "resume the loop". Do NOT use for a single task, for a feature with no formal tasks.md, or for Specify, Design, or Tasks authoring - those stay interactive in tlc-spec-driven.
+description: Unattended execution loop for an approved tlc-spec-driven tasks.md: detects the phase from git commit trailers, dispatches batches to per-stage configurable providers, commits each task atomically, repairs its own failures, and halts with a recorded reason instead of stalling. Use when running a formal tasks.md to a verified PASS without per-batch prompting, resuming an interrupted run, or supplying the stage-routing contract when named beside tlc-spec-driven during Tasks. Another skill reaches it when tlc-spec-driven delegates Execute to loop mode. Triggers on "run the loop" and "resume the loop". Do NOT take ownership of Specify, Design, or Tasks authoring - those stay interactive in tlc-spec-driven.
 license: CC-BY-4.0
 metadata:
   version: 0.1.0
@@ -35,6 +35,18 @@ reimplemented here.
   more than it saves below one batch.
 - **A feature with no formal `tasks.md`.** Bootstrap refuses.
 - **Anything remote.** See the blast-radius rule below.
+
+### Opt-in handoff during Tasks
+
+When the user names `$tlc-loop` together with `$tlc-spec-driven` while creating
+Tasks, supply [tasks-routing-contract.md](references/tasks-routing-contract.md)
+as an output contract. The authoring skill remains in charge, the Tasks phase
+remains interactive, and Execute does not start.
+
+Before the plan is presented for approval, both read-only gates in that
+contract must pass: the sibling's `validate_tasks.py` and this skill's
+`validate_routing.py`. If only `$tlc-spec-driven` is named, do not impose this
+contract.
 
 ---
 
@@ -117,11 +129,12 @@ network, no model calls.
 | --- | --- | --- |
 | `init_loop.py` | bootstrap; writes `loop.json` exactly once | 0 |
 | `detect_phase.py` | read-only; prints the next action | every iteration |
+| `validate_routing.py` | read-only; validates and prints the Tasks stage map | Tasks |
 | `update_loop.py` | the only mutator of `loop.json` | every iteration |
 | `checkpoint.py` | mutating; the atomic per-task commit and its trailers | B, F |
 | `resolve_stage.py` | read-only; turns a configured stage into a concrete invocation | B, V, F |
 | `loop.sh` | mutating; spawns the respawn agent across turns | continuation |
-| `_paths` `_state_io` `_config` `_gitio` `_tasksmd` `_batching` | support modules | imported, never invoked |
+| `_paths` `_state_io` `_config` `_gitio` `_tasksmd` `_routing` `_batching` | support modules | imported, never invoked |
 
 From the sibling `tlc-spec-driven`, resolved through `_paths.tlc_script()`:
 `validate_tasks.py` gates bootstrap, `check_commit.py` gates every commit
@@ -169,15 +182,16 @@ python3 <skill-dir>/scripts/init_loop.py <feature> --root <root> \
 ```
 
 Exit 1 names the precondition that failed: not a git repository, missing
-`tasks.md`, `validate_tasks.py` rejected the plan, or the config does not
-parse. Exit 2 is a refusal: already bootstrapped, or the harness could not be
-resolved. **Never guess the harness** - a wrong guess misroutes every dispatch.
+`tasks.md`, `validate_tasks.py` rejected the plan, invalid phase routing, or
+the config does not parse. Route errors are aggregated and no state is created.
+Exit 2 is a refusal: already bootstrapped, or the harness could not be resolved.
+**Never guess the harness** - a wrong guess misroutes every dispatch.
 A harness with no verified environment marker does not auto-detect and must be
 named with `--respawn`; codex is currently one of those
 ([provider-discovery.md](references/provider-discovery.md)).
 
-Then check the whole config once, so a bad stage is found now rather than four
-hours in:
+Bootstrap prints the effective phase map before execution. Then check the whole
+config once, so even an unused bad stage is found now rather than four hours in:
 
 ```bash
 python3 <skill-dir>/scripts/resolve_stage.py --validate --root <root> --feature <feature>
@@ -189,13 +203,15 @@ Done when: `loop.json` exists and every configured stage resolves.
 
 #### Phase B - Execute one batch
 
-The detect line names the batch and its exact task ids. Use those ids. Never
-"the next few tasks".
+The detect line names the batch, its exact task ids, and `stage=<effective>`.
+Use those ids and that stage. Never "the next few tasks", and never infer a
+stage from a phase title.
 
 1. **Resolve the executor.**
    ```bash
-   python3 <skill-dir>/scripts/resolve_stage.py --stage implement --root <root> \
-     --feature <feature> --prompt "<payload>" --evidence <file>
+   python3 <skill-dir>/scripts/resolve_stage.py \
+     --stage <stage-from-detect-line> --root <root> --feature <feature> \
+     --prompt "<payload>" --evidence <file>
    ```
    `kind=agent` means dispatch through the harness' own sub-agent mechanism.
    `kind=command` means spawn that command line. A `timeout=<seconds>` field is
@@ -383,6 +399,7 @@ halt a run live in `loop.json`, and only the agent writes them.
 | [provider-discovery.md](references/provider-discovery.md) | How each marker and effort value was obtained, and which are unresolved |
 | [state-schema.md](references/state-schema.md) | `loop.json` fields and invariants |
 | [config-schema.md](references/config-schema.md) | `loop.config.toml` keys and defaults |
+| [tasks-routing-contract.md](references/tasks-routing-contract.md) | Opt-in handoff for stage-aware Tasks authoring |
 | [checklist.md](references/checklist.md) | Per-iteration self-audit |
 | [goal-condition.template.md](assets/goal-condition.template.md) | Ready-made `/goal` condition |
 | [iteration-summary.template.md](assets/iteration-summary.template.md) | The summary block printed each iteration |

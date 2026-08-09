@@ -67,7 +67,7 @@ def defaults():
             "verify": dict(_STAGE_DEFAULT),
             "fix": dict(_STAGE_DEFAULT),
         },
-        "execute": {"batch_size": 7},
+        "execute": {"batch_size": 7, "strict_routing": False},
         # No hard-coded maximum (D5): the ceiling exists only when the user
         # sets one, exactly like a `[limits]` key.
         "verify": {"max_rounds": None},
@@ -117,6 +117,14 @@ def _check_limits(cfg):
             )
 
 
+def _check_execute(cfg):
+    value = cfg["execute"]["strict_routing"]
+    if not isinstance(value, bool):
+        raise ConfigError(
+            f"execute.strict_routing: expected a boolean, got {value!r}"
+        )
+
+
 def load_config(root):
     """Return the config for a project root, with every absent key defaulted."""
     cfg = defaults()
@@ -134,8 +142,11 @@ def load_config(root):
         cfg["version"] = raw["version"]
     for name, stage in (raw.get("stages") or {}).items():
         cfg["stages"][name] = _merge_stage(cfg["stages"].get(name, _STAGE_DEFAULT), stage)
-    if "batch_size" in (raw.get("execute") or {}):
-        cfg["execute"]["batch_size"] = raw["execute"]["batch_size"]
+    execute = raw.get("execute") or {}
+    if "batch_size" in execute:
+        cfg["execute"]["batch_size"] = execute["batch_size"]
+    if "strict_routing" in execute:
+        cfg["execute"]["strict_routing"] = execute["strict_routing"]
     if "max_rounds" in (raw.get("verify") or {}):
         cfg["verify"]["max_rounds"] = raw["verify"]["max_rounds"]
 
@@ -154,4 +165,5 @@ def load_config(root):
 
     _check_effort(cfg)
     _check_limits(cfg)
+    _check_execute(cfg)
     return cfg

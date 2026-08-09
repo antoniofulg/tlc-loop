@@ -46,7 +46,110 @@ not siblings.
 
 ## Quick start
 
-Plan a feature with `tlc-spec-driven` as usual. Once its `tasks.md` is approved:
+### 1. Configure the implementation stages
+
+Custom phase stages must exist in `.specs/loop.config.toml` before Tasks are
+validated. For example:
+
+```toml
+[stages.foundation]
+provider = "codex"
+
+[stages.backend]
+provider = "codex"
+
+[stages.frontend]
+provider = "cursor"
+
+[stages.docs]
+provider = "claude"
+
+[execute]
+strict_routing = true
+```
+
+The names are project-defined; `foundation`, `backend`, `frontend`, and `docs`
+are common examples, not a fixed vocabulary. The full provider/model example
+is in [Configuration](#configuration).
+
+### 2. Ask for loop-compatible Tasks
+
+Name both skills while `tlc-spec-driven` is authoring Tasks:
+
+```text
+$tlc-spec-driven create the tasks for feature <name> for execution by
+$tlc-loop, with phases separated by stage.
+```
+
+To suggest the common domains without requiring them, append:
+
+```text
+Prioritize foundation, backend, frontend, and docs as configured in
+.specs/loop.config.toml.
+```
+
+This applies the [Tasks routing contract](references/tasks-routing-contract.md)
+but does not start Execute. `tlc-spec-driven` still owns dependencies,
+granularity, tests, review, and approval.
+
+Each generated phase must put `Stage` on its first non-empty line:
+
+```markdown
+### Phase 2: Checkout API
+
+**Stage:** backend
+```
+
+Keep dependencies and cohesion ahead of domain boundaries. One phase has one
+stage; the same stage may reappear in later phases. Stage values use lowercase
+kebab-case (`[a-z][a-z0-9-]*`). `verify`, `fix`, and `continue.respawn` are
+reserved runtime roles and cannot route implementation phases.
+
+### 3. Validate before approval
+
+Run both read-only gates:
+
+```bash
+python3 ~/.agents/skills/tlc-spec-driven/scripts/validate_tasks.py my-feature --root .
+python3 ~/.agents/skills/tlc-loop/scripts/validate_routing.py my-feature --root .
+```
+
+The routing gate prints the effective map:
+
+```text
+route:
+  Phase 1: Shared setup -> foundation
+  Phase 2: Checkout API -> backend
+  Phase 3: Checkout UI -> frontend
+  Phase 4: Guides -> docs
+```
+
+Both commands must exit 0 before `tasks.md` is approved. An explicit typo,
+unknown stage, duplicate/misplaced `Stage`, non-integer phase number, or
+reserved runtime stage is an error; it never silently falls back.
+
+At execution time, `detect_phase.py` makes the route authoritative on its
+single output line:
+
+```text
+phase=B action=execute_batch batch=P2 tasks=T4,T5,T6 stage=backend
+```
+
+The loop passes that exact value to the resolver. To inspect the resolved
+executor manually:
+
+```bash
+python3 ~/.agents/skills/tlc-loop/scripts/resolve_stage.py \
+  --stage backend --root . --feature my-feature \
+  --prompt "inspect only" --evidence /tmp/tlc-loop-evidence.txt
+```
+
+Do not derive the stage again from a phase title. Batches are homogeneous: a
+stage change always closes the current batch.
+
+### 4. Approve and run
+
+Once `tasks.md` is approved:
 
 ```
 /tlc-loop my-feature
@@ -65,9 +168,20 @@ python3 ~/.agents/skills/tlc-loop/scripts/detect_phase.py my-feature --root .
 This is read-only. It prints exactly one line and writes nothing, so it is safe
 to run at any point, including mid-run.
 
+### Compatibility and strict mode
+
+| Setting | Phase without `**Stage:**` | Invalid explicit stage |
+| --- | --- | --- |
+| `strict_routing = false` (default) | Routes to `implement` | Rejected |
+| `strict_routing = true` | Rejected | Rejected |
+
+Leave strict mode off for existing `tasks.md` files. Turn it on when every
+implementation phase must declare its operational route explicitly.
+
 ## Configuration
 
-Optional. Absent, every key falls back to a documented default. Copy
+Optional for legacy `tasks.md`; required when phases use custom stage names.
+Absent, every key falls back to a documented default. Copy
 `assets/loop.config.example.toml` to `.specs/loop.config.toml` in your project.
 
 The setup this skill exists for — a cheap implementer paired with a
@@ -79,6 +193,23 @@ provider = "codex"
 model = "gpt-5.6-luna"
 effort = "max"
 
+[stages.foundation]
+provider = "codex"
+model = "gpt-5.6-luna"
+
+[stages.backend]
+provider = "codex"
+model = "gpt-5.6-luna"
+effort = "high"
+
+[stages.frontend]
+provider = "cursor"
+model = "composer-2.5"
+
+[stages.docs]
+provider = "claude"
+model = "haiku"
+
 [stages.verify]
 provider = "claude"
 model = "opus"
@@ -88,6 +219,9 @@ effort = "high"
 provider = "codex"
 model = "gpt-5.6-luna"
 effort = "max"
+
+[execute]
+strict_routing = false       # missing Stage -> implement
 
 [limits]                    # omit a key for unlimited
 no_progress_iterations = 3

@@ -123,21 +123,25 @@ reading or writing `loop.json`.
 
 ### Batch worker
 
-Runs one batch: one or more consecutive whole phases, packed to the task
-budget.
+Runs one batch: one or more consecutive whole phases with one effective stage,
+packed to the task budget. The `stage=` field on the Phase B detect line is
+authoritative. Resolve that exact value with `resolve_stage.py`; never infer a
+route from a phase title or silently substitute `implement`.
 
 | Item | Detail |
 | --- | --- |
 | Task definitions | Every task in the batch, in full, in order. |
+| Effective stage | The exact `stage=` value from the detect line. |
 | Test Coverage Matrix | From `tasks.md`, so tests land in the right layer and location. |
 | Spec ACs | The acceptance criteria the batch's tasks trace to. |
 | Design context | Only the components the batch touches. |
 | Per-task cycle | `implement.md`, **with the commit step removed**. |
 
-The per-task cycle is the parent skill's, minus commits: implement, write
-tests derived from the spec, run the gate, record the result, move to the next
-task. The worker finishes every task in a phase before starting the next phase
-in its batch.
+The per-task cycle is the parent skill's, minus commits: implement, write tests
+derived from the spec, run the gate, record the result, move to the next task.
+The worker finishes every task in a phase before starting the next phase in its
+batch. A stage transition is always a new batch, even when the task budget has
+room.
 
 **Reports per task:** task id, gate level, gate result, files changed, and any
 `SPEC_DEVIATION`. Per task, not per batch: the orchestrator checkpoints one

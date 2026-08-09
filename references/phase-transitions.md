@@ -42,7 +42,7 @@ Every line the implementation can print, with the condition that produces it.
 | --- | --- |
 | `phase=0 action=bootstrap` | `loop.json` does not exist for this feature. |
 | `phase=H action=halt reason=<slug> detail="<text>"` | A halt condition holds. Checked before any work is described. |
-| `phase=B action=execute_batch batch=<label> tasks=<ids>` | At least one planned task is not yet done. |
+| `phase=B action=execute_batch batch=<label> tasks=<ids> stage=<effective-stage>` | At least one planned task is not yet done and every phase route is valid. |
 | `phase=E action=done` | Nothing pending, `validate_state.py` exits 0, and the recorded verdict still covers HEAD. |
 | `phase=F action=fix round=<N>` | Nothing pending, not done, the last verdict was `FAIL` and gaps are still open. |
 | `phase=V action=verify round=<N>` | Nothing pending, not done, and no open gaps to fix. |
@@ -61,6 +61,10 @@ plus `detail`, and nothing follows a halt that could act on the observation.
   `T1,T2,T3`. The ids are explicit on purpose. Phase labels alone become
   ambiguous the moment `tasks.md` is edited, and the transcript is what an
   external evaluator reads.
+- `stage=<effective-stage>` is the configured implementation route shared by
+  every phase in the batch. An omitted `**Stage:**` becomes `implement` only
+  when `execute.strict_routing` is false. The field is the input to
+  `resolve_stage.py`; consumers never infer it from the phase title.
 - `round=<N>` on `phase=V` is the verify round about to run:
   `verify.rounds + 1`.
 - `round=<N>` on `phase=F` is the round whose gaps are being fixed:
@@ -96,11 +100,15 @@ contract, not an implementation detail.
 3. **Halt check** → `phase=H`. See the precedence below.
 4. **Derive what is done.** `git log --reverse --format="%(trailers:key=Task,valueonly)"`,
    deduped, unioned with the legacy `no_diff_tasks` from `loop.json`.
-5. **Derive the plan.** Task ids and phases parsed from `tasks.md`. A missing
-   `tasks.md` exits 1.
+5. **Derive and route the plan.** Task ids, phases, and `**Stage:**` fields are
+   parsed from `tasks.md`, then resolved against `loop.config.toml`. A missing
+   plan, malformed phase metadata, unknown or reserved stage, or missing stage
+   in strict mode exits 1 before a batch is named. Routing errors are
+   aggregated.
 6. **`pending = planned - done`.** Non-empty → `phase=B`, packing the pending
-   tasks into batches of whole phases up to `execute.batch_size` and naming the
-   first one.
+   tasks into batches of consecutive whole phases with the same effective
+   stage, up to `execute.batch_size`, and naming the first one. A stage change
+   always closes a batch.
 7. **Ask the validator, then ask how old its answer is.** `validate_state.py`
    exiting 0 says the report reads PASS with evidence. It cannot say whether
    the report describes *this* code. So the PASS counts only while

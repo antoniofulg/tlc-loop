@@ -113,6 +113,35 @@ T5 -> T6
 **Gate**: quick
 """
 
+STAGED_TASKS_MD = (
+    TASKS_MD.replace(
+        "### Phase 1: Foundation\n\n",
+        "### Phase 1: Foundation\n\n**Stage:** foundation\n\n",
+    )
+    .replace(
+        "### Phase 2: Wiring\n\n",
+        "### Phase 2: Backend wiring\n\n**Stage:** backend\n\n",
+    )
+    .replace(
+        f"### Phase 3: Polish\n\n{FENCE}\nT5 -> T6\n{FENCE}",
+        f"""### Phase 3: Frontend polish
+
+**Stage:** frontend
+
+{FENCE}
+T5
+{FENCE}
+
+### Phase 4: Documentation
+
+**Stage:** docs
+
+{FENCE}
+T6
+{FENCE}""",
+    )
+)
+
 #: The file each task's `Where` field names in TASKS_MD above.
 TASK_FILES = {
     "T1": "one",
@@ -293,8 +322,38 @@ class EndToEnd(unittest.TestCase):
         self.bootstrap()
         self.assertTrue(os.path.isfile(self.state_path()))
         self.assertEqual(
-            self.detect(), "phase=B action=execute_batch batch=P1 tasks=T1,T2"
+            self.detect(),
+            "phase=B action=execute_batch batch=P1 tasks=T1,T2 stage=implement",
         )
+
+    def test_four_domain_stages_route_as_four_ordered_batches(self):
+        self.write(".specs/features/toy/tasks.md", STAGED_TASKS_MD)
+        self.write_config(
+            '[stages.foundation]\nprovider = "auto"\n'
+            '[stages.backend]\nprovider = "auto"\n'
+            '[stages.frontend]\nprovider = "auto"\n'
+            '[stages.docs]\nprovider = "auto"\n'
+            '[execute]\nstrict_routing = true\nbatch_size = 7\n'
+        )
+        bootstrapped = self.bootstrap()
+        for expected in (
+            "Phase 1: Foundation -> foundation (claude/-)",
+            "Phase 2: Backend wiring -> backend (claude/-)",
+            "Phase 3: Frontend polish -> frontend (claude/-)",
+            "Phase 4: Documentation -> docs (claude/-)",
+        ):
+            self.assertIn(expected, bootstrapped.stdout)
+
+        expected_batches = (
+            ("phase=B action=execute_batch batch=P1 tasks=T1,T2 stage=foundation", ("T1", "T2")),
+            ("phase=B action=execute_batch batch=P2 tasks=T3,T4 stage=backend", ("T3", "T4")),
+            ("phase=B action=execute_batch batch=P3 tasks=T5 stage=frontend", ("T5",)),
+            ("phase=B action=execute_batch batch=P4 tasks=T6 stage=docs", ("T6",)),
+        )
+        for line, tasks in expected_batches:
+            self.assertEqual(self.detect(), line)
+            self.complete(*tasks)
+        self.assertEqual(self.detect(), "phase=V action=verify round=1")
 
     # ---- 2. trailers advance the phase ----------------------------------
 
@@ -304,7 +363,8 @@ class EndToEnd(unittest.TestCase):
         self.complete("T1", "T2")
         self.assertEqual(
             self.detect(),
-            "phase=B action=execute_batch batch=P2+P3 tasks=T3,T4,T5,T6",
+            "phase=B action=execute_batch batch=P2+P3 "
+            "tasks=T3,T4,T5,T6 stage=implement",
         )
 
     def test_the_advance_is_carried_by_the_task_trailers(self):
@@ -339,7 +399,9 @@ class EndToEnd(unittest.TestCase):
         self.complete("T1", "T2")
         before = self.detect()
         self.assertEqual(
-            before, "phase=B action=execute_batch batch=P2+P3 tasks=T3,T4,T5,T6"
+            before,
+            "phase=B action=execute_batch batch=P2+P3 "
+            "tasks=T3,T4,T5,T6 stage=implement",
         )
 
         os.unlink(self.state_path())
