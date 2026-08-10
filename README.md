@@ -69,8 +69,11 @@ strict_routing = true
 ```
 
 The names are project-defined; `foundation`, `backend`, `frontend`, and `docs`
-are common examples, not a fixed vocabulary. The full provider/model example
-is in [Configuration](#configuration).
+are common examples, not a fixed vocabulary. Stages are one of eight tables the
+file accepts — [Configuration](#configuration) lists the whole surface, every
+key is specified in [`references/config-schema.md`](references/config-schema.md),
+and [`assets/loop.config.example.toml`](assets/loop.config.example.toml) is a
+commented file to copy.
 
 ### 2. Ask for loop-compatible Tasks
 
@@ -183,6 +186,27 @@ implementation phase must declare its operational route explicitly.
 Optional for legacy `tasks.md`; required when phases use custom stage names.
 Absent, every key falls back to a documented default. Copy
 `assets/loop.config.example.toml` to `.specs/loop.config.toml` in your project.
+
+Everything the file accepts, with the default each key falls back to. What a key
+*means* is in [`references/config-schema.md`](references/config-schema.md); this
+table is only the surface, so you can see what exists without opening it:
+
+| Table | Keys | Default |
+| --- | --- | --- |
+| `version` | — | `1` |
+| `[stages.<name>]` | `provider`, `model`, `effort` | `auto`, absent, absent |
+| `[execute]` | `batch_size`, `strict_routing` | `7`, `false` |
+| `[verify]` | `max_rounds` | unlimited |
+| `[continue]` | `mode` | `auto` |
+| `[continue.respawn]` | `provider`, `model`, `effort` | `auto`, absent, absent |
+| `[limits]` | `no_progress_iterations`, `gate_attempts_per_task`, `executor_timeout_seconds`, `max_iterations`, `max_minutes` | unlimited |
+| `[providers.<name>]` | `kind`, `command` | absent |
+
+Under `[limits]`, absent means unlimited — TOML has no `null`, so a ceiling
+applies only when written down. Before an unattended run set at least
+`no_progress_iterations`, `gate_attempts_per_task`, and
+`executor_timeout_seconds`: the first two catch a loop going nowhere, the third
+catches a provider CLI that hangs and prints nothing at all.
 
 The setup this skill exists for — a cheap implementer paired with a
 high-reasoning verifier:
