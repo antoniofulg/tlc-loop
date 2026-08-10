@@ -1,6 +1,6 @@
 """Parity between the shipped prose and the code it describes (T33, LOOP-06).
 
-Four checks live here. The first is the halt vocabulary; the second (T38) is
+Five checks live here. The first is the halt vocabulary; the second (T38) is
 the claim about what deleting `loop.json` costs, which drifted through three
 verification rounds because each fix chased the citations it was handed instead
 of searching the repository. The third (T42) is the no-diff contract, which
@@ -9,7 +9,10 @@ because a scanner that matches phrasings cannot see a paragraph explaining a
 mechanism that no longer exists. Both fixes are here so the next one has
 somewhere obvious to go. The fourth is the README's configuration surface,
 which lists every `[limits]` key the loop reads: a table that omits a real
-setting is read as proof the setting does not exist.
+setting is read as proof the setting does not exist. The fifth is the README's
+stage examples against the shipped `loop.config.example.toml` - the README
+claims they are the same configuration, and they had already drifted by one
+`effort` key when the check was written.
 
 The halt vocabulary is enumerated in three places: `update_loop.HALT_REASONS`,
 the Phase H branch of `SKILL.md`, and the field shapes in
@@ -32,6 +35,7 @@ exclusions, which is a different claim from "this is the vocabulary".
 import os
 import re
 import sys
+import tomllib
 import unittest
 
 SCRIPTS = os.path.dirname(os.path.abspath(__file__))
@@ -327,6 +331,49 @@ class StageRoutingContractParity(unittest.TestCase):
         self.assertIn("$tlc-spec-driven", readme)
         self.assertIn("$tlc-loop", readme)
         self.assertIn("validate_routing.py", readme)
+
+
+#: The two `[stages.*]` examples in the README, by something only that block
+#: contains. The Configuration block carries the runtime stages; the Quick start
+#: block carries the domain stages a reader copies first.
+CONFIG_EXAMPLE = "[stages.implement]"
+QUICKSTART_EXAMPLE = "strict_routing = true"
+
+
+def toml_block_containing(relative_path, anchor):
+    """Parse the fenced ```toml block of a document that contains `anchor`."""
+    blocks = re.findall(r"```toml\n(.*?)```", read_shipped(relative_path), re.DOTALL)
+    for block in blocks:
+        if anchor in block:
+            return tomllib.loads(block)
+    raise AssertionError(
+        f"{relative_path}: none of its {len(blocks)} toml block(s) contains "
+        f"{anchor!r}; the example is gone and parity can no longer be checked"
+    )
+
+
+class StageExampleParity(unittest.TestCase):
+    """The README's stage examples are the shipped example file, not a variant.
+
+    The README says so in prose, which is what makes them copies rather than
+    illustrations. A copy that drifts documents a configuration nobody ran -
+    `[stages.foundation]` had already lost its `effort` this way.
+    """
+
+    def setUp(self):
+        self.shipped = tomllib.loads(read_shipped("assets/loop.config.example.toml"))
+
+    def test_the_configuration_example_matches_the_shipped_file(self):
+        readme = toml_block_containing("README.md", CONFIG_EXAMPLE)
+        self.assertEqual(readme["stages"], self.shipped["stages"])
+
+    def test_the_quick_start_example_agrees_on_every_stage_it_shows(self):
+        # A subset by design: Quick start shows the domain stages only, and
+        # omitting one is a teaching choice. Contradicting one is not.
+        readme = toml_block_containing("README.md", QUICKSTART_EXAMPLE)
+        self.assertTrue(readme["stages"], "the quick start example shows no stage")
+        for stage, configured in readme["stages"].items():
+            self.assertEqual(configured, self.shipped["stages"][stage], stage)
 
 
 def _fenced(lines):
