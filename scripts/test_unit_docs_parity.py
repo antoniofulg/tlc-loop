@@ -1,13 +1,15 @@
 """Parity between the shipped prose and the code it describes (T33, LOOP-06).
 
-Three checks live here. The first is the halt vocabulary; the second (T38) is
+Four checks live here. The first is the halt vocabulary; the second (T38) is
 the claim about what deleting `loop.json` costs, which drifted through three
 verification rounds because each fix chased the citations it was handed instead
 of searching the repository. The third (T42) is the no-diff contract, which
 drifted the same way for the same reason - and got past the second check,
 because a scanner that matches phrasings cannot see a paragraph explaining a
 mechanism that no longer exists. Both fixes are here so the next one has
-somewhere obvious to go.
+somewhere obvious to go. The fourth is the README's configuration surface,
+which lists every `[limits]` key the loop reads: a table that omits a real
+setting is read as proof the setting does not exist.
 
 The halt vocabulary is enumerated in three places: `update_loop.HALT_REASONS`,
 the Phase H branch of `SKILL.md`, and the field shapes in
@@ -36,6 +38,7 @@ SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(SCRIPTS)
 sys.path.insert(0, SCRIPTS)
 
+import _config  # noqa: E402
 import update_loop  # noqa: E402
 
 #: Where each document enumerates the vocabulary, the phrase that anchors it,
@@ -48,6 +51,13 @@ ENUMERATIONS = (
 )
 
 BACKTICKED = re.compile(r"`([a-z_]+)`")
+
+#: The row of the README's configuration-surface table that names every
+#: `[limits]` key. It is a copy of `_config.LIMIT_KEYS`, so it comes under the
+#: same gate as the halt table: a limit the code reads and the surface omits
+#: reads as "there is no such setting", which is the one mistake this table is
+#: there to prevent.
+LIMITS_ROW = "| `[limits]` | "
 
 
 def documented_reasons(relative_path, anchor, terminator=".\n"):
@@ -89,6 +99,30 @@ def assert_parity(relative_path, documented):
         raise AssertionError(
             f"{relative_path} documents halt reason(s) the code does not "
             f"implement: {', '.join(extra)}"
+        )
+
+
+def documented_limit_keys():
+    """Return the `[limits]` keys the README's configuration surface names."""
+    path = os.path.join(ROOT, "README.md")
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+    start = text.find(LIMITS_ROW)
+    if start < 0:
+        raise AssertionError(
+            f"README.md: the configuration-surface row anchored on "
+            f"{LIMITS_ROW!r} is gone; parity can no longer be checked"
+        )
+    row = text[start + len(LIMITS_ROW):text.find("\n", start)]
+    return BACKTICKED.findall(row)
+
+
+class ConfigSurfaceParity(unittest.TestCase):
+    """The README's configuration table names exactly the implemented limits."""
+
+    def test_readme_names_exactly_the_implemented_limit_keys(self):
+        self.assertEqual(
+            sorted(documented_limit_keys()), sorted(_config.LIMIT_KEYS)
         )
 
 
