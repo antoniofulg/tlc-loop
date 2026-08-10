@@ -3,7 +3,7 @@ name: tlc-loop
 description: Unattended execution loop for an approved tlc-spec-driven tasks.md: detects the phase from git commit trailers, dispatches batches to per-stage configurable providers, commits each task atomically, repairs its own failures, and halts with a recorded reason instead of stalling. Use when running a formal tasks.md to a verified PASS without per-batch prompting, resuming an interrupted run, or supplying the stage-routing contract when named beside tlc-spec-driven during Tasks. Another skill reaches it when tlc-spec-driven delegates Execute to loop mode. Triggers on "run the loop" and "resume the loop". Do NOT take ownership of Specify, Design, or Tasks authoring - those stay interactive in tlc-spec-driven.
 license: CC-BY-4.0
 metadata:
-  version: 0.1.0
+  version: 0.2.0
 ---
 
 # Unattended Execution Loop
