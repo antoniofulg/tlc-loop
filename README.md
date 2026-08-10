@@ -48,36 +48,70 @@ not siblings.
 
 ### 1. Configure the implementation stages
 
-Custom phase stages must exist in `.specs/loop.config.toml` before Tasks are
-validated. For example:
+A stage is a label your plan puts on a phase. This file is what gives the label
+meaning: **which CLI runs that phase, on which model, at which reasoning tier.**
+Custom stages must exist in `.specs/loop.config.toml` before Tasks are
+validated, because the routing gate checks every declared stage against it.
 
 ```toml
 [stages.foundation]
 provider = "codex"
+model = "gpt-5.6-luna"
+effort = "medium"
 
 [stages.backend]
 provider = "codex"
+model = "gpt-5.6-luna"
+effort = "high"
 
 [stages.frontend]
 provider = "cursor"
+model = "composer-2.5"
 
 [stages.docs]
 provider = "claude"
+model = "haiku"
 
 [execute]
 strict_routing = true
 ```
 
-The names are project-defined; `foundation`, `backend`, `frontend`, and `docs`
-are common examples, not a fixed vocabulary. Stages are one of eight tables the
-file accepts — [Configuration](#configuration) lists the whole surface, every
-key is specified in [`references/config-schema.md`](references/config-schema.md),
-and [`assets/loop.config.example.toml`](assets/loop.config.example.toml) is a
+Every stage takes the same three keys, and only the first has a default worth
+relying on:
+
+| Key | Default | What it selects |
+| --- | --- | --- |
+| `provider` | `"auto"` — the harness the loop is running inside | Which CLI executes the phase: `claude`, `codex`, `cursor`, or one you declare under `[providers.<name>]` |
+| `model` | absent — the provider's own default | Passed through to that CLI verbatim |
+| `effort` | absent — the provider's own default | Reasoning tier: `low`, `medium`, `high`, `xhigh`, `max` |
+
+`frontend` and `docs` omit `effort` above on purpose: that is how you leave a
+provider's own default in place.
+
+One field, three translations. `claude` takes a separate `--effort` flag, `codex`
+takes a `-c model_reasoning_effort=` config override, and `cursor` has no effort
+flag at all — the tier is part of the model id, so the adapter uses its bracket
+syntax. That is why `effort` is one portable field in your config instead of
+three vendor-specific ones; the table doing the translating is
+[`references/providers.md`](references/providers.md).
+
+`implement`, `verify`, and `fix` exist without being declared. `verify`, `fix`,
+and `continue.respawn` are reserved runtime roles — a Tasks phase cannot route
+to them. Every other name is yours: `foundation`, `backend`, `frontend`, and
+`docs` are examples, not a fixed vocabulary, and `mobile`, `infra`, or `data`
+work identically.
+
+Stages are one of eight tables the file accepts — [Configuration](#configuration)
+lists the whole surface, every key is specified in
+[`references/config-schema.md`](references/config-schema.md), and
+[`assets/loop.config.example.toml`](assets/loop.config.example.toml) is a
 commented file to copy.
 
 ### 2. Ask for loop-compatible Tasks
 
-Name both skills while `tlc-spec-driven` is authoring Tasks:
+Name both skills while `tlc-spec-driven` is authoring Tasks. Naming `$tlc-loop`
+here contributes the output contract and nothing else: it does not take over the
+phase and does not start Execute.
 
 ```text
 $tlc-spec-driven create the tasks for feature <name> for execution by
@@ -89,6 +123,19 @@ To suggest the common domains without requiring them, append:
 ```text
 Prioritize foundation, backend, frontend, and docs as configured in
 .specs/loop.config.toml.
+```
+
+A filled-in request, for a feature with a real shape. Naming the dependencies
+you already know about is what keeps the split from being decided by domain
+labels alone:
+
+```text
+$tlc-spec-driven create the tasks for feature checkout-v2 for execution by
+$tlc-loop. Separate phases by stage, prioritizing foundation, backend,
+frontend, and docs as configured in .specs/loop.config.toml. Keep dependency
+order ahead of domain boundaries: the payment client and its fixtures come
+before any endpoint that calls it, and the checkout UI comes after the
+endpoints it consumes.
 ```
 
 This applies the [Tasks routing contract](references/tasks-routing-contract.md)
@@ -103,10 +150,81 @@ Each generated phase must put `Stage` on its first non-empty line:
 **Stage:** backend
 ```
 
-Keep dependencies and cohesion ahead of domain boundaries. One phase has one
-stage; the same stage may reappear in later phases. Stage values use lowercase
-kebab-case (`[a-z][a-z0-9-]*`). `verify`, `fix`, and `continue.respawn` are
-reserved runtime roles and cannot route implementation phases.
+#### What the divided `tasks.md` looks like
+
+The request above produces a phase list of this shape — headings and stages
+only, tasks elided:
+
+```markdown
+### Phase 1: Payment client and fixtures
+
+**Stage:** foundation
+
+### Phase 2: Checkout and payment endpoints
+
+**Stage:** backend
+
+### Phase 3: Checkout UI
+
+**Stage:** frontend
+
+### Phase 4: Webhook reconciliation
+
+**Stage:** backend
+
+### Phase 5: Integration guide and runbook
+
+**Stage:** docs
+```
+
+At execution time that becomes one batch per phase, each dispatched to whatever
+its stage names in the config from step 1:
+
+| Phase | Stage | Executor it resolves to |
+| --- | --- | --- |
+| 1 | `foundation` | `codex`, `gpt-5.6-luna`, effort `medium` |
+| 2 | `backend` | `codex`, `gpt-5.6-luna`, effort `high` |
+| 3 | `frontend` | `cursor`, `composer-2.5` |
+| 4 | `backend` | `codex`, `gpt-5.6-luna`, effort `high` |
+| 5 | `docs` | `claude`, `haiku` |
+
+`backend` appearing twice is valid — a stage may reappear in later,
+non-consecutive phases — and phase 4 stays where it is because the
+reconciliation depends on the endpoints from phase 2. Batches are never mixed: a
+stage change closes the current batch even when the task budget still has room.
+
+#### Rules that decide the split
+
+Applied in this order:
+
+1. **Preserve dependency order.** It outranks every domain boundary.
+2. **One effective stage per phase.** Tasks needing different stages never share
+   a phase.
+3. A stage may reappear in later, non-consecutive phases.
+4. Target about seven tasks per phase, with a ceiling around ten.
+5. Do not split a cohesive, testable task merely to obtain a prettier domain
+   boundary.
+
+A task that genuinely spans domains and cannot be divided uses the stage capable
+of the whole task, usually `implement`. If its parts can ship and be tested
+independently, split the task first and let each part take its own stage.
+
+#### Shapes that are rejected
+
+None of these fall back to a default; each one fails the routing gate:
+
+```markdown
+### Phase 1: API
+Some explanation first.
+**Stage:** backend
+```
+
+`Stage` has to be the first non-empty line after the heading. These values fail
+too: `Backend` (not lowercase), `backend_api` (not kebab-case, which is
+`[a-z][a-z0-9-]*`), `backned` (not a configured stage), and `verify` or `fix`
+(reserved runtime roles). Phase numbers must be positive integers and unique, so
+`Phase 2a` and a repeated `Phase 2` are errors, as is a second `Stage` in one
+phase.
 
 ### 3. Validate before approval
 
@@ -220,6 +338,7 @@ effort = "max"
 [stages.foundation]
 provider = "codex"
 model = "gpt-5.6-luna"
+effort = "medium"
 
 [stages.backend]
 provider = "codex"
@@ -251,6 +370,10 @@ strict_routing = false       # missing Stage -> implement
 no_progress_iterations = 3
 gate_attempts_per_task = 3
 ```
+
+This block is the same stage set as `assets/loop.config.example.toml`, and a test
+holds the two in sync. `frontend` and `docs` carry no `effort`, which leaves each
+provider's own default in place.
 
 Check the whole file before a long run, so a bad stage surfaces now rather than
 four hours in:
