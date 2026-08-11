@@ -203,6 +203,35 @@ def parse(path):
     return tasks
 
 
+def mark_done(path, task_id):
+    """Add the completion tick to a task's header. True when the file changed.
+
+    The tick is a *claim*, which is exactly why it is written here: `checkpoint`
+    applies it in the same commit as the gate that earned it, so the plan and
+    the `Task:` trailer are recorded together and cannot disagree. A tick added
+    later is a second commit against a tree a verifier may already have passed.
+
+    A task the plan does not declare, or one already ticked, leaves the file
+    byte-identical.
+    """
+    with open(path, encoding="utf-8") as handle:
+        lines = handle.read().splitlines(keepends=True)
+
+    wanted = task_id.upper()
+    for index, line in enumerate(lines):
+        header = TASK_RE.match(line.strip())
+        if not header or header.group(1).upper() != wanted:
+            continue
+        body = line.rstrip("\r\n")
+        if DONE_MARK_RE.search(body):
+            return False
+        lines[index] = body + " ✅" + line[len(body):]
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.writelines(lines)
+        return True
+    return False
+
+
 def parse_phases(path):
     """Return ordered phase records with title, declared Stage, and task ids.
 

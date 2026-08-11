@@ -379,6 +379,131 @@ class VerifyRounds(unittest.TestCase):
             self.assertNotEqual(_run(root, "--verify-round", "MAYBE").returncode, 0)
 
 
+class VerificationEpochs(unittest.TestCase):
+    """`epoch_rounds` is what `verify.max_rounds` bounds.
+
+    `rounds` keeps counting for the life of the run, because "how many times was
+    this verified" is a real question. It is the wrong number to compare a
+    ceiling against: the ceiling exists to stop a FAIL, fix, re-verify cycle
+    that is not converging, and a tree that has moved past a PASS is not that
+    cycle - it is a new one, owed a fresh look and a fresh budget.
+    """
+
+    def test_a_round_advances_both_counters(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed_repo(root)
+            _seed(root)
+            _run(root, "--verify-round", "FAIL")
+            verify = _read(root)["verify"]
+            self.assertEqual((verify["rounds"], verify["epoch_rounds"]), (1, 1))
+
+    def test_a_fail_cycle_keeps_accumulating_in_the_same_epoch(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed_repo(root)
+            _seed(root)
+            for _ in range(3):
+                _commit_more(root, f"fix{_}.py", "fix: repair a gap")
+                _run(root, "--verify-round", "FAIL")
+            verify = _read(root)["verify"]
+            self.assertEqual((verify["rounds"], verify["epoch_rounds"]), (3, 3))
+
+    def test_a_round_after_a_stale_pass_starts_the_epoch_over(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed_repo(root)
+            _seed(root, verify={"rounds": 3, "epoch_rounds": 3, "last_verdict": "PASS",
+                                "last_report": None, "gaps_open": 0,
+                                "verified_at": "0" * 40})
+            _run(root, "--verify-round", "FAIL")
+            verify = _read(root)["verify"]
+            self.assertEqual(verify["epoch_rounds"], 1)
+
+    def test_the_lifetime_total_keeps_climbing_across_epochs(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed_repo(root)
+            _seed(root, verify={"rounds": 3, "epoch_rounds": 3, "last_verdict": "PASS",
+                                "last_report": None, "gaps_open": 0,
+                                "verified_at": "0" * 40})
+            _run(root, "--verify-round", "FAIL")
+            self.assertEqual(_read(root)["verify"]["rounds"], 4)
+
+    def test_a_pass_that_still_covers_head_is_not_a_new_epoch(self):
+        with tempfile.TemporaryDirectory() as root:
+            head = _seed_repo(root)
+            _seed(root, verify={"rounds": 2, "epoch_rounds": 2, "last_verdict": "PASS",
+                                "last_report": None, "gaps_open": 0,
+                                "verified_at": head})
+            _run(root, "--verify-round", "FAIL")
+            self.assertEqual(_read(root)["verify"]["epoch_rounds"], 3)
+
+    def test_a_state_written_before_epochs_reads_its_rounds_as_the_epoch(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed_repo(root)
+            state = _seed(root)
+            del state["verify"]["epoch_rounds"]
+            state["verify"]["rounds"] = 2
+            _state_io.save(FEATURE, root, state)
+            _run(root, "--verify-round", "FAIL")
+            self.assertEqual(_read(root)["verify"]["epoch_rounds"], 3)
+
+
+class CompleteNeedsACoveredHead(unittest.TestCase):
+    """`--status complete` is a claim about the tree, so the tree is checked.
+
+    The incident recorded `complete` while the verdict was real, and then two
+    commits landed. Nothing re-read the claim afterwards, and `complete` is
+    exactly the field a reader trusts. It is refused unless the recorded PASS
+    still covers HEAD, which makes the field unable to outlive its evidence.
+    """
+
+    def test_a_pass_covering_head_is_accepted(self):
+        with tempfile.TemporaryDirectory() as root:
+            head = _seed_repo(root)
+            _seed(root, verify={"rounds": 1, "epoch_rounds": 1, "last_verdict": "PASS",
+                                "last_report": None, "gaps_open": 0,
+                                "verified_at": head})
+            proc = _run(root, "--status", "complete")
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(_read(root)["status"], "complete")
+
+    def test_a_stale_pass_is_refused(self):
+        with tempfile.TemporaryDirectory() as root:
+            head = _seed_repo(root)
+            _seed(root, verify={"rounds": 1, "epoch_rounds": 1, "last_verdict": "PASS",
+                                "last_report": None, "gaps_open": 0,
+                                "verified_at": head})
+            _commit_more(root)
+            proc = _run(root, "--status", "complete")
+            self.assertEqual(proc.returncode, 2)
+            self.assertEqual(_read(root)["status"], "active")
+
+    def test_a_fail_verdict_is_refused(self):
+        with tempfile.TemporaryDirectory() as root:
+            head = _seed_repo(root)
+            _seed(root, verify={"rounds": 1, "epoch_rounds": 1, "last_verdict": "FAIL",
+                                "last_report": None, "gaps_open": 1,
+                                "verified_at": head})
+            self.assertEqual(_run(root, "--status", "complete").returncode, 2)
+
+    def test_no_verdict_at_all_is_refused(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed_repo(root)
+            _seed(root)
+            self.assertEqual(_run(root, "--status", "complete").returncode, 2)
+
+    def test_the_refusal_applies_none_of_the_other_flags(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed_repo(root)
+            _seed(root)
+            _run(root, "--status", "complete", "--iteration-done", "--phase", "E")
+            self.assertEqual(_read(root)["iteration"], 0)
+
+    def test_the_other_statuses_are_untouched_by_the_guard(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed_repo(root)
+            _seed(root)
+            self.assertEqual(_run(root, "--status", "blocked").returncode, 0)
+
+
 class HaltRecording(unittest.TestCase):
     def test_a_halt_records_the_reason_and_detail_detect_phase_prints(self):
         with tempfile.TemporaryDirectory() as root:

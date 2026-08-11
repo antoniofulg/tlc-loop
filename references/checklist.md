@@ -98,12 +98,17 @@ happened, it is the wrong box: find the file or the exit code that proves it.
 - [ ] `verify.gaps_open` matches the number of ranked gaps in the report.
 - [ ] On FAIL, the grounded failures were distilled into lessons through the
       sibling skill's `lessons.py`. A clean PASS records nothing.
-- [ ] If `verify.max_rounds` is spent without a PASS, no further round was
-      started. The detector enforces this: it prints
+- [ ] On PASS, the report was committed with `checkpoint.py --seal` and by no
+      other route. Committing it any other way moves HEAD off the verified
+      commit and reopens verification.
+      *Evidence: `git show --name-only HEAD` lists exactly `validation.md`, and
+      `git log -1` carries `Verification-Of` and `Verification-Result`.*
+- [ ] If this epoch's `verify.max_rounds` is spent without a PASS, no further
+      round was started. The detector enforces this: it prints
       `phase=H action=halt reason=verify_exhausted` instead of `phase=V` or
       `phase=F`, so nothing has to be recorded by hand.
-      *Evidence: the detect line, against `verify.rounds` in `loop.json` and
-      `verify.max_rounds` in `loop.config.toml`. An omitted `max_rounds` is
+      *Evidence: the detect line, against `verify.epoch_rounds` in `loop.json`
+      and `verify.max_rounds` in `loop.config.toml`. An omitted `max_rounds` is
       unlimited, so no halt is due.*
 
 ## Phase F - fix
@@ -123,17 +128,24 @@ happened, it is the wrong box: find the file or the exit code that proves it.
 
 ## Phase E - done
 
-- [ ] Detection printed `phase=E`, which means `validate_state.py` exited 0.
+- [ ] Detection printed `phase=E`, which means `validate_state.py` exited 0
+      **and** the recorded verdict still covers HEAD.
       *Evidence: re-run it if there is any doubt; exit 0 is the only success.*
 - [ ] The `validation.md` verdict is PASS and cites `file:line` evidence, not
       prose.
 - [ ] `pending` is genuinely empty: every task in `tasks.md` carries a `Task:`
       trailer.
       *Evidence: the trailer list against the parsed plan.*
-- [ ] `--status complete` was recorded.
-      *Evidence: `status` in `loop.json`.*
-- [ ] The done-signature is the **last** line of output and carries this
-      feature's name: `__TLC_LOOP__ feature=<feature> verify=PASS`.
+- [ ] The working tree is clean. The report is sealed; nothing else is loose.
+      *Evidence: `git status --porcelain` shows nothing but `loop.json`.*
+- [ ] `finish_loop.py` exited 0. It records `--status complete` and prints the
+      signature itself, after re-checking that nothing moved underneath it.
+      *Evidence: its exit code and the signature as the last line of output.*
+- [ ] **The signature was not typed by hand, in this iteration or any other.**
+      One script prints it, and a line printed from memory is a success claim
+      nothing checked.
+      *Evidence: the transcript shows the `finish_loop.py` invocation directly
+      above the signature.*
 
 ## Phase H - halt
 

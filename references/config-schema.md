@@ -135,7 +135,7 @@ only when both batches use the same stage.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `max_rounds` | integer | unlimited | How many verify rounds may run before the loop halts and escalates. |
+| `max_rounds` | integer | unlimited | How many verify rounds may run **in one verification epoch** before the loop halts and escalates. |
 
 `max_rounds` is not under `[limits]`, but it follows the same rule: omit it and
 there is no ceiling. The verify budget is a user decision with no hard-coded
@@ -145,6 +145,19 @@ Reaching the ceiling without a PASS makes `detect_phase.py` print
 `phase=H action=halt reason=verify_exhausted` in place of the next `phase=V` or
 `phase=F`. Set it if an unattended run should stop rather than keep paying for
 verify rounds that are not converging.
+
+**It bounds an epoch, not the run.** A FAIL, fix, re-verify cycle is exactly
+what it exists to stop, so that cycle spends from the budget however many
+commits the fixes take. A commit landing after a PASS is a different situation -
+a tree nobody has verified yet - and it opens a new epoch with a full budget.
+The distinction is specified in
+[verification-freshness.md](verification-freshness.md). Raising this number is
+not the way to unstick a run that verified and then took another commit; that
+run needs a round it is already entitled to.
+
+The run-wide ceilings under `[limits]` are unaffected: `max_iterations`,
+`max_minutes` and `no_progress_iterations` measure the run, so a reopened epoch
+spends from the same clock as the first one.
 
 ```toml
 [verify]

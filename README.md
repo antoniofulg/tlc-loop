@@ -397,8 +397,8 @@ has to start the next one:
 | codex | its native goal feature |
 | anything else | `bash scripts/loop.sh my-feature --root .` |
 
-A goal evaluator reads the transcript; it cannot run commands. So the loop prints
-a literal signature line once — and only once — `validate_state.py` exits 0:
+A goal evaluator reads the transcript; it cannot run commands. So one script —
+`finish_loop.py`, and nothing else in the skill — prints a literal signature line:
 
 ```
 __TLC_LOOP__ feature=my-feature verify=PASS
@@ -407,6 +407,47 @@ __TLC_LOOP__ feature=my-feature verify=PASS
 The supplied condition judges on that line alone. It explicitly rejects a summary
 claiming the feature is finished, a green test run, and a passing report, which is
 what stops a run from being declared done because the model said so.
+
+`finish_loop.py` prints it only after re-deriving that the detector says
+`phase=E action=done`, the working tree is clean, and the recorded verdict still
+covers HEAD — then recording completion and checking all three again. Matching
+the line is therefore matching a deterministic check rather than a sentence.
+
+## Verification freshness
+
+A PASS describes the tree the verifier read. Anything committed afterwards is
+code no verifier has seen, however green the gates, so the verdict is recorded
+together with the commit it covered and stops counting the moment HEAD moves
+past it.
+
+That leaves one problem: committing `validation.md` moves HEAD too, so the
+evidence could never be versioned without invalidating what it is evidence of.
+The **seal** is the one commit that resolves it — a direct child of the verified
+commit whose diff is exactly the report, carrying `Verification-Of` and
+`Verification-Result` trailers, refusing runtime code, config, tests, `tasks.md`
+and `design.md` alike:
+
+```bash
+python3 ~/.agents/skills/tlc-loop/scripts/checkpoint.py my-feature --root . --seal
+```
+
+For a change that must land after a PASS anyway — a base branch that moved —
+`--reopen` does the opposite: it commits through the same authorized writer and
+*voids* the verdict, so the next detect opens a fresh verification epoch and
+asks for a new independent look at the merged tree.
+
+`verify.max_rounds` bounds one such epoch, not the life of the run. A FAIL, fix,
+re-verify cycle spends from it; a commit landing after a PASS starts a new epoch
+with a full budget, because that tree has been verified zero times.
+
+Before publishing, the read-only preflight answers whether HEAD is safe to push:
+
+```bash
+python3 ~/.agents/skills/tlc-loop/scripts/finish_loop.py my-feature --root . \
+  --preflight origin/main
+```
+
+Full contract: `references/verification-freshness.md`.
 
 ## How it decides what to do next
 

@@ -40,8 +40,8 @@ class NewState(unittest.TestCase):
         self.assertEqual(state["reconciled"], [])
         self.assertEqual(
             state["verify"],
-            {"rounds": 0, "last_verdict": None, "last_report": None, "gaps_open": 0,
-             "verified_at": None},
+            {"rounds": 0, "epoch_rounds": 0, "last_verdict": None,
+             "last_report": None, "gaps_open": 0, "verified_at": None},
         )
         self.assertEqual(state["counters"]["iterations_without_commit"], 0)
         self.assertEqual(state["counters"]["gate_attempts"], {})
@@ -102,6 +102,54 @@ class RoundTrip(unittest.TestCase):
             # sort_keys=True: top-level keys appear in sorted order.
             emitted = [ln.split('"')[1] for ln in top_level]
             self.assertEqual(emitted, sorted(state.keys()))
+
+
+class LegacyStateMigration(unittest.TestCase):
+    """A file written before `epoch_rounds` existed reads deterministically.
+
+    `verify.max_rounds` bounds the epoch, so a v1 file with only the lifetime
+    `rounds` needs an epoch count. Reading it as `rounds` is the conservative
+    answer: an in-flight run keeps exactly the budget it already had, rather
+    than silently gaining a fresh one on upgrade.
+    """
+
+    def _v1(self, root, rounds):
+        state = _state_io.new_state("demo", "ship demo", "claude")
+        state["verify"]["rounds"] = rounds
+        del state["verify"]["epoch_rounds"]
+        os.makedirs(os.path.dirname(_state_io.state_path("demo", root)), exist_ok=True)
+        with open(_state_io.state_path("demo", root), "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(state, indent=2, sort_keys=True) + "\n")
+
+    def test_the_absent_field_reads_as_the_lifetime_total(self):
+        with tempfile.TemporaryDirectory() as root:
+            self._v1(root, 3)
+            self.assertEqual(_state_io.load("demo", root)["verify"]["epoch_rounds"], 3)
+
+    def test_reading_twice_gives_the_same_answer(self):
+        with tempfile.TemporaryDirectory() as root:
+            self._v1(root, 2)
+            first = _state_io.load("demo", root)
+            self.assertEqual(first, _state_io.load("demo", root))
+
+    def test_a_present_field_is_left_alone(self):
+        with tempfile.TemporaryDirectory() as root:
+            state = _state_io.new_state("demo", "ship demo", "claude")
+            state["verify"].update({"rounds": 5, "epoch_rounds": 1})
+            os.makedirs(
+                os.path.dirname(_state_io.state_path("demo", root)), exist_ok=True
+            )
+            _state_io.save("demo", root, state)
+            self.assertEqual(_state_io.load("demo", root)["verify"]["epoch_rounds"], 1)
+
+    def test_the_migration_writes_nothing_on_its_own(self):
+        with tempfile.TemporaryDirectory() as root:
+            self._v1(root, 3)
+            with open(_state_io.state_path("demo", root), "rb") as fh:
+                before = fh.read()
+            _state_io.load("demo", root)
+            with open(_state_io.state_path("demo", root), "rb") as fh:
+                self.assertEqual(fh.read(), before)
 
 
 class MalformedJson(unittest.TestCase):

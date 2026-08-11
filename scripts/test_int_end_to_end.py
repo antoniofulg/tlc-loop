@@ -157,6 +157,13 @@ PASS_REPORT = """## Validation: toy - PASS
 Per-AC evidence: `src/one.py:1` implements LOOP-01 AC 1.
 """
 
+#: The second report. A re-verification after a merge covers a different diff
+#: range, so it is a different file - which is also what makes it sealable.
+SECOND_PASS_REPORT = """## Validation: toy - PASS
+
+Per-AC evidence: `src/six.py:1` implements LOOP-01 AC 1 after the base merge.
+"""
+
 #: Stands in for `resolve_stage.py`. It appends to a marker file on every call,
 #: which is how the tests prove no executor was ever resolved, let alone run.
 RESOLVE_STUB = '''#!/usr/bin/env python3
@@ -479,6 +486,9 @@ class EndToEnd(unittest.TestCase):
     def test_a_commit_after_the_pass_reopens_verification(self):
         # The gap dogfooding exposed: the report was PASS, but a task landed
         # after it and detect still said done (T34).
+        #
+        # The round number is 1, not 2: the commit closed the epoch that PASS
+        # belonged to, and the tree it produced has been verified zero times.
         self.bootstrap()
         self.complete("T1", "T2", "T3", "T4", "T5", "T6")
         self.record_pass()
@@ -486,7 +496,7 @@ class EndToEnd(unittest.TestCase):
         self.write("late.txt", "landed after the verification")
         _git(self.root, "add", "-A")
         _git(self.root, "commit", "-q", "-m", "docs: land something after the verification")
-        self.assertEqual(self.detect(), "phase=V action=verify round=2")
+        self.assertEqual(self.detect(), "phase=V action=verify round=1")
 
     def test_the_driver_stops_on_done_instead_of_respawning(self):
         self.bootstrap()
@@ -496,6 +506,137 @@ class EndToEnd(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(proc.stdout.splitlines()[-1], "phase=E action=done")
         self.assert_no_executor_ran()
+
+    def test_the_driver_never_prints_the_done_signature(self):
+        # Scenario 15. `loop.sh` stops on `phase=E`; it does not conclude
+        # anything. Only `finish_loop.py` can put that line in a transcript, so
+        # a goal evaluator matching it is matching a deterministic decision.
+        self.bootstrap()
+        self.complete("T1", "T2", "T3", "T4", "T5", "T6")
+        self.record_pass()
+        proc = self.run_loop_sh()
+        self.assertNotIn("__TLC_LOOP__", proc.stdout)
+        self.assertNotIn("__TLC_LOOP__", proc.stderr)
+
+
+    # ---- 6. the incident -------------------------------------------------
+    #
+    # Scenario 14: the real run, start to finish, ending in a signed E.
+    #
+    # What happened: a verifier passed commit `V` on the third of three allowed
+    # rounds. A checkpoint then committed the report and the plan updates, and a
+    # second one merged a base branch that had moved. Both gates passed. No
+    # verifier had seen either tree, `verify.rounds` had reached its ceiling, and
+    # the detector answered `verify_exhausted` with a detail claiming no PASS had
+    # ever happened. The signature was printed anyway.
+    #
+    # Every test below is the same sequence with the machinery it was missing:
+    # the report goes in as a seal, the merge goes in as a reopen, the reopened
+    # epoch gets its own budget, and the signature comes from the finalizer.
+
+    def bounded_run(self):
+        """Bootstrap with `max_rounds = 3`, and land every task."""
+        self.write_config("[verify]\nmax_rounds = 3\n")
+        self.bootstrap()
+        self.complete("T1", "T2", "T3", "T4", "T5", "T6")
+
+    def record_round(self, verdict, report=PASS_REPORT):
+        self.write(".specs/features/toy/validation.md", report)
+        proc = self.run_script(
+            "update_loop.py", "toy", "--root", self.root,
+            "--verify-round", verdict, "--gaps", "0",
+            "--report", ".specs/features/toy/validation.md",
+            "--iteration-done", "--phase", "V", "--action", f"verify {verdict}",
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def seal(self):
+        proc = self.run_script("checkpoint.py", "toy", "--root", self.root, "--seal")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return proc
+
+    def spend_the_budget(self):
+        """Two FAIL rounds, then the PASS on the third and last allowed one."""
+        self.bounded_run()
+        self.record_round("FAIL")
+        self.record_round("FAIL")
+        self.record_round("PASS")
+
+    def base_branch_moves(self):
+        """A commit lands on the base branch after the feature was verified."""
+        _git(self.root, "checkout", "-q", "-b", "side", "HEAD~3")
+        self.write("upstream.txt", "landed on main\n")
+        _git(self.root, "add", "-A")
+        _git(self.root, "commit", "-q", "-m", "feat(upstream): land something on main")
+        _git(self.root, "checkout", "-q", "main")
+
+    def test_the_pass_on_the_last_allowed_round_is_done(self):
+        self.spend_the_budget()
+        self.assertEqual(self.detect(), "phase=E action=done")
+
+    def test_sealing_the_report_keeps_it_done(self):
+        self.spend_the_budget()
+        self.seal()
+        self.assertEqual(self.detect(), "phase=E action=done")
+
+    def test_the_merge_reopens_verification_instead_of_exhausting_it(self):
+        self.spend_the_budget()
+        self.seal()
+        self.base_branch_moves()
+        _git(self.root, "merge", "--no-commit", "--no-ff", "side", check=False)
+        reopened = self.run_script(
+            "checkpoint.py", "toy", "--root", self.root, "--reopen",
+            "--message", "chore(toy): integrate the base branch",
+        )
+        self.assertEqual(reopened.returncode, 0, reopened.stderr)
+        self.assertEqual(self.detect(), "phase=V action=verify round=1")
+
+    def test_the_reopened_run_reaches_a_signed_done(self):
+        self.spend_the_budget()
+        self.seal()
+        self.base_branch_moves()
+        _git(self.root, "merge", "--no-commit", "--no-ff", "side", check=False)
+        self.run_script(
+            "checkpoint.py", "toy", "--root", self.root, "--reopen",
+            "--message", "chore(toy): integrate the base branch",
+        )
+        self.record_round("PASS", SECOND_PASS_REPORT)
+        self.seal()
+        self.assertEqual(self.detect(), "phase=E action=done")
+
+        finished = self.run_script("finish_loop.py", "toy", "--root", self.root)
+        self.assertEqual(finished.returncode, 0, finished.stderr)
+        self.assertEqual(
+            finished.stdout.splitlines()[-1], "__TLC_LOOP__ feature=toy verify=PASS"
+        )
+
+    def test_the_signature_is_refused_before_the_second_verification(self):
+        # The exact moment the real run signed. Every gate had passed and the
+        # tree was two commits past the only verdict on record.
+        self.spend_the_budget()
+        self.seal()
+        self.base_branch_moves()
+        _git(self.root, "merge", "--no-commit", "--no-ff", "side", check=False)
+        self.run_script(
+            "checkpoint.py", "toy", "--root", self.root, "--reopen",
+            "--message", "chore(toy): integrate the base branch",
+        )
+        finished = self.run_script("finish_loop.py", "toy", "--root", self.root)
+        self.assertNotEqual(finished.returncode, 0)
+        self.assertNotIn("__TLC_LOOP__", finished.stdout)
+
+    def test_publishing_is_refused_while_the_base_is_ahead(self):
+        # Scenario 11, in the run that needed it. `origin/main` carries a commit
+        # HEAD does not, so a push would drag an unverified merge behind it.
+        self.spend_the_budget()
+        self.seal()
+        self.base_branch_moves()
+        _git(self.root, "update-ref", "refs/remotes/origin/main", "side")
+        proc = self.run_script(
+            "finish_loop.py", "toy", "--root", self.root, "--preflight", "origin/main"
+        )
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("origin/main", proc.stderr)
 
 
 if __name__ == "__main__":

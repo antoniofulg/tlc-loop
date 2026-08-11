@@ -94,8 +94,8 @@ restores none of it:
 | --- | --- |
 | `objective` | Re-supplied at bootstrap, and nothing checks the new one against the old. A rebuilt run can be driving at a different target. |
 | `counters` | Every `[limits]` budget restarts, including the `max_minutes` clock measured from `started_at_ms`. A run near a limit walks away from it. |
-| `verify.rounds`, `last_verdict`, `gaps_open` | The `verify.max_rounds` budget restarts, so a run that was one round from `verify_exhausted` gets a full new allowance. |
-| `verify.verified_at` | The rebuilt state owes one verification round; a PASS no longer covers HEAD. |
+| `verify.rounds`, `epoch_rounds`, `last_verdict`, `gaps_open` | The `verify.max_rounds` budget restarts, so a run that was one round from `verify_exhausted` gets a full new allowance. |
+| `verify.verified_at` | The rebuilt state owes one verification round; no verdict covers HEAD any more, whatever the report on disk says. |
 | `halt` | A recorded halt is cleared. A run that stopped for a reason resumes as if it had not. |
 | `reconciled`, `iterations` | The audit trails. Nothing derives a decision from them, but the record of what happened is gone. |
 | `no_diff_tasks` | Legacy, and empty on any run bootstrapped after T37. A run already in flight when T37 landed loses the entries it wrote. |
@@ -134,7 +134,7 @@ beats a state nobody can read.
 | `active` | Running normally. The value set at bootstrap. |
 | `blocked` | An external blocker was proven against all three criteria. |
 | `halted` | A halt condition fired. Set automatically whenever a halt is recorded. |
-| `complete` | The run finished and was verified. |
+| `complete` | The run finished and was verified. `update_loop.py` refuses to write it unless the recorded PASS still covers HEAD, so the field cannot outlive its evidence. |
 
 ### The no-diff contract
 
@@ -198,23 +198,28 @@ iteration until the tick or the history is fixed stores it exactly once.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `rounds` | integer | Verify rounds run so far. Starts at `0`, incremented once per round. |
+| `rounds` | integer | Verify rounds run so far, for the life of the run. Starts at `0`, incremented once per round. |
+| `epoch_rounds` | integer | Rounds run in the current verification epoch. What `verify.max_rounds` bounds. |
 | `last_verdict` | string or null | `PASS`, `FAIL`, or `null` before the first round. |
 | `last_report` | string or null | Path of the most recent `validation.md`. |
 | `gaps_open` | integer | Gaps the last FAIL round left unconsumed. |
+| `verified_at` | string or null | Full SHA of the commit the last verdict covered. |
 
 `detect_phase.py` reads `last_verdict` and `gaps_open` together: a `FAIL`
 verdict with `gaps_open > 0` selects `phase=F` (fix), anything else selects
 `phase=V` (verify).
 
-`verified_at` holds the commit the last verdict covered, stamped by
-`update_loop.py --verify-round`. A PASS closes the feature only while that
-commit is still HEAD; anything committed afterwards reopens verification. It is
-the one verification fact git cannot supply on its own, which is why it lives
-here rather than being derived.
+`verified_at` is stamped by `update_loop.py --verify-round`. It is the one
+verification fact git cannot supply on its own, which is why it lives here
+rather than being derived - and it is the input to the coverage rule that
+decides whether a PASS still describes the tree.
 
-Before either, it compares `rounds` against `verify.max_rounds` from the
-config. Reaching the ceiling without a PASS prints
+**Coverage, the seal, and what an epoch is are specified once, in
+[verification-freshness.md](verification-freshness.md).** Nothing about them is
+restated here; the fields above are the storage, not the contract.
+
+Before naming a round, the detector compares `epoch_rounds` against
+`verify.max_rounds` from the config. Reaching the ceiling without a PASS prints
 `phase=H action=halt reason=verify_exhausted`, so the escalation is enforced by
 the detector rather than remembered by the loop. An omitted `max_rounds` is
 unlimited and never halts.
@@ -312,10 +317,12 @@ decision from it, which is why trimming old entries is safe.
   "no_diff_tasks": ["T4"],
 
   "verify": {
-    "rounds": 1,
+    "rounds": 4,
+    "epoch_rounds": 1,
     "last_verdict": "FAIL",
     "last_report": ".specs/features/auth-refresh/validation.md",
-    "gaps_open": 2
+    "gaps_open": 2,
+    "verified_at": "1f0c2e9a4b7d8c5e3a1b9f7d2c4e6a8b0d3f5c71"
   },
 
   "counters": {

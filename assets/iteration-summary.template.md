@@ -30,18 +30,22 @@ phase_out is neither E nor H  -> re-enter detection in the same turn.
 phase_out is E or H           -> stop.
 
 DONE-SIGNATURE
-When phase_out is E, print this line - and only this line - immediately after
-the block, on its own line, as the LAST line of the message:
+Never write the signature yourself, here or anywhere. When phase_out is E, run
+the finalizer immediately after this block:
 
-    __TLC_LOOP__ feature=<feature> verify=PASS
+    python3 <skill-dir>/scripts/finish_loop.py <feature> --root <root>
 
-Substitute the real feature name. It is part of the signature: two features
-running in one transcript would otherwise satisfy each other's goal condition.
+It re-derives the situation, records completion through update_loop.py, checks
+that nothing moved underneath it, and prints the signature as the last line of
+output. Exit 2 is a refusal naming what is wrong - repair the cause and re-enter
+detection rather than printing anything in its place.
 
 The signature is the interface to every continuation mechanism. A /goal
 evaluator, a codex native goal, and a grep in loop.sh all watch for that line,
-and none of them can run validate_state.py to find out for themselves.
+and none of them can run validate_state.py to find out for themselves. That is
+exactly why one script owns it: matching the line has to be equivalent to
+trusting a deterministic check, not to trusting a summary.
 
-Never print it for phase_out=H. The signature means verified; a halted or
-blocked run is not.
+It is never printed for phase_out=H. The signature means verified; a halted or
+blocked run is not - and finish_loop.py refuses on anything but phase=E.
 -->

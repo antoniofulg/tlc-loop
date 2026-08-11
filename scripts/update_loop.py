@@ -106,6 +106,31 @@ def build_parser():
     return parser
 
 
+def _not_completable(state, root, feature):
+    """Why `--status complete` must be refused, or None when it may be written.
+
+    `complete` is the field a later reader trusts, so it is not allowed to
+    outlive its evidence. The incident recorded it while the verdict was
+    genuine, then two commits landed and nothing re-read the claim - leaving a
+    state file asserting a finished, verified feature over a tree no verifier
+    had seen.
+
+    Pending tasks are deliberately not checked here: that needs the plan, and
+    `finish_loop.py` already refuses on anything other than `phase=E`. This is
+    the narrower guard that holds even when `--status complete` is typed by
+    hand.
+    """
+    verify = state.get("verify") or {}
+    if verify.get("last_verdict") != "PASS":
+        return f"the last verdict is {verify.get('last_verdict')!r}, not PASS"
+    if not _gitio.verification_covers_head(state, root, feature):
+        return (
+            "HEAD is neither the verified commit nor a valid seal over it, so "
+            "the recorded PASS does not describe this tree"
+        )
+    return None
+
+
 def apply(state, args):
     """Apply the requested mutations to `state` in place."""
     if args.batch is not None:
@@ -141,11 +166,20 @@ def apply(state, args):
         attempts[args.gate_attempt] = int(attempts.get(args.gate_attempt, 0)) + 1
 
     if args.verify_round:
-        state["verify"]["rounds"] = int(state["verify"].get("rounds") or 0) + 1
-        state["verify"]["last_verdict"] = args.verify_round
+        verify = state["verify"]
+        # A round recorded against a tree that has moved past the last PASS is
+        # the first round of a new epoch, not the next one of the old. `rounds`
+        # keeps the lifetime total, because "how many times was this verified"
+        # is a real question; `epoch_rounds` is what `verify.max_rounds` bounds.
+        reopened = verify.get("last_verdict") == "PASS" and not (
+            _gitio.verification_covers_head(state, args.root, args.feature)
+        )
+        verify["rounds"] = int(verify.get("rounds") or 0) + 1
+        verify["epoch_rounds"] = 1 if reopened else int(verify.get("epoch_rounds") or 0) + 1
+        verify["last_verdict"] = args.verify_round
         # The commit the verification covered. detect_phase compares it against
         # HEAD so a PASS stops counting once the code moves past it (LOOP-04).
-        state["verify"]["verified_at"] = _gitio.head_commit(args.root)
+        verify["verified_at"] = _gitio.head_commit(args.root)
     if args.gaps is not None:
         state["verify"]["gaps_open"] = args.gaps
     if args.report is not None:
@@ -205,6 +239,20 @@ def main(argv=None):
     root = os.path.abspath(args.root)
     try:
         state = _state_io.load(args.feature, root)
+    except _state_io.StateError as exc:
+        print(f"update_loop: {exc}", file=sys.stderr)
+        return 1
+
+    # `complete` is a claim about the tree, so the tree decides. The refusal
+    # happens before `apply`, so a rejected call cannot half-apply the flags it
+    # was carrying - the same rule the immutable objective follows above.
+    if args.status == "complete":
+        refusal = _not_completable(state, root, args.feature)
+        if refusal:
+            print(f"update_loop: refusing --status complete: {refusal}", file=sys.stderr)
+            return 2
+
+    try:
         _state_io.save(args.feature, root, apply(state, args))
     except _state_io.StateError as exc:
         print(f"update_loop: {exc}", file=sys.stderr)
