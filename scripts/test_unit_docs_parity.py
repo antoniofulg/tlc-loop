@@ -373,6 +373,30 @@ class GateAttemptHasADocumentedWriter(unittest.TestCase):
             "that runs one",
         )
 
+    def test_the_recovery_loop_carves_the_exception_in_both_rules(self):
+        # Two separate sentences forbade the write: "no counter moves" in the
+        # opening, and "never calls update_loop.py" in step 1. An exception
+        # stated in only one of them leaves the other still forbidding it.
+        text = read_shipped("references/recovery-loop.md")
+        head, _, body = text.partition("## Repair loop")
+        for section, where in (
+            (head, "the repairable-by-default rule"),
+            (body, "step 1 of the repair loop"),
+        ):
+            self.assertIn(
+                "--gate-attempt",
+                section,
+                f"references/recovery-loop.md: {where} still forbids the one "
+                "counter write Phase B requires",
+            )
+
+    def test_the_partition_separates_the_two_rules_it_checks(self):
+        text = read_shipped("references/recovery-loop.md")
+        head, separator, body = text.partition("## Repair loop")
+        self.assertTrue(separator, "the '## Repair loop' heading is gone")
+        self.assertIn("no counter moves", head)
+        self.assertIn("never calls", body)
+
     def test_the_section_scan_stops_at_the_next_phase(self):
         # A scan that ran to the end of the file would pass on a mention in any
         # later branch, which is exactly the drift it is meant to catch.

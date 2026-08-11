@@ -196,7 +196,7 @@ T6 → T7 → T8
 
 ---
 
-### T5: Name the failed gate as the counter exception
+### T5: Name the failed gate as the counter exception ✅
 
 **What**: Amend the "no counter moves" and "never calls `update_loop.py`" rules to name the failed gate as the single exception, pointing at the Phase B step from T4, and guard it with a parity test.
 **Where**: `references/recovery-loop.md`
@@ -383,7 +383,7 @@ No task carries `Tests: none`. T6 and T7 add no new parity test of their own: bo
 | RESUME-02 | T2 | Verified in T2 |
 | RESUME-03 | T1 | Verified in T1 |
 | RESUME-04 | T3 | Verified in T3 |
-| RESUME-05 | T4, T5 | Pending |
+| RESUME-05 | T4, T5 | Verified in T4+T5 |
 | RESUME-06 | T6, T7, T8 | Pending |
 
 **Coverage:** 6 total, 6 mapped to tasks, 0 unmapped.
