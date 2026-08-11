@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 21,
+  "next_id": 22,
   "lessons": [
     {
       "id": "L-001",
@@ -365,6 +365,24 @@
       ],
       "created": "2026-08-09T08:37:24Z",
       "last_seen": "2026-08-09T08:37:24Z"
+    },
+    {
+      "id": "L-021",
+      "key": "surviving_mutant::when an acceptance criterion scopes a documentation requirement to a named section assert the needle inside that section not across the whole file",
+      "text": "When an acceptance criterion scopes a documentation requirement to a named section, assert the needle inside that section, not across the whole file",
+      "signal": "surviving_mutant",
+      "scope": "docs-parity",
+      "status": "candidate",
+      "features": [
+        "halt-resume"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "scripts/test_unit_docs_parity.py:377-389 (mutants M11b, M12, M14) (docs-parity)"
+      ],
+      "created": "2026-08-11T14:01:35Z",
+      "last_seen": "2026-08-11T14:01:35Z"
     }
   ]
 }

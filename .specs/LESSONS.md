@@ -134,6 +134,12 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: M11 references/state-schema.md:243-245 (survived 396/396) (docs/parity)
 - last seen: 2026-08-09T08:37:24Z
 
+### L-021 - When an acceptance criterion scopes a documentation requirement to a named section, assert the needle inside that section, not across the whole file
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `docs-parity` · harmful: 0
+- features: halt-resume
+- evidence: scripts/test_unit_docs_parity.py:377-389 (mutants M11b, M12, M14) (docs-parity)
+- last seen: 2026-08-11T14:01:35Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

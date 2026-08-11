@@ -374,33 +374,101 @@ class ClearingAHaltHasOneSupportedRoute(unittest.TestCase):
         self.assertTrue(offenders)
         self.assertIn("fake.md:1", offenders[0])
 
-    def test_the_documents_that_describe_the_halt_name_the_flag(self):
-        # Retraction without replacement leaves the reader with nothing, which
-        # is how the hand-edit instruction survived a rewrite the last time.
-        for relative in (
+    # Retraction without replacement leaves the reader with nothing, which is
+    # how the hand-edit instruction survived a rewrite the last time. Each
+    # check is scoped to the passage its criterion names: the flag being
+    # present *somewhere* in the file is not what any of them ask for, and a
+    # whole-file search passed while the mention sat in an unrelated section.
+
+    def test_the_transition_row_names_the_flag(self):
+        row = table_row(
+            read_shipped("references/phase-transitions.md"),
+            "| `H` |",
             "references/phase-transitions.md",
-            "references/state-schema.md",
-            "SKILL.md",
-        ):
-            self.assertIn(
-                "--resume",
-                read_shipped(relative),
-                f"{relative} describes the halt but not the flag that lifts it",
-            )
+        )
+        self.assertIn(
+            "--resume",
+            row,
+            "the H transition row says how a halt clears without naming the "
+            "command that clears it",
+        )
+
+    def test_the_halt_field_section_names_the_command(self):
+        body = section(
+            read_shipped("references/state-schema.md"), "## `halt`", "references/state-schema.md"
+        )
+        self.assertIn(
+            "update_loop.py <feature> --root <root> --resume",
+            collapsed(body),
+            "the `halt` field section does not carry the command that clears it",
+        )
+
+    def test_the_halt_phase_names_the_command(self):
+        body = section(read_shipped("SKILL.md"), "#### Phase H - Halt", "SKILL.md")
+        self.assertIn(
+            "update_loop.py <feature> --root <root> --resume",
+            collapsed(body),
+            "Phase H does not carry the command a human runs to lift the halt "
+            "it just recorded; naming the flag in passing is not the same thing",
+        )
+
+    def test_each_scope_excludes_the_passage_that_follows_it(self):
+        # The check that makes the three above mean anything: a scan running to
+        # the end of the file would pass on a mention in any later section.
+        skill = section(read_shipped("SKILL.md"), "#### Phase H - Halt", "SKILL.md")
+        self.assertIn("blast_radius", skill)
+        self.assertNotIn("### Step 3", skill)
+        schema = section(
+            read_shipped("references/state-schema.md"), "## `halt`", "references/state-schema.md"
+        )
+        self.assertIn("blast_radius", schema)
+        self.assertNotIn("## `iterations[]`", schema)
+        row = table_row(
+            read_shipped("references/phase-transitions.md"),
+            "| `H` |",
+            "references/phase-transitions.md",
+        )
+        self.assertNotIn("\n", row)
 
 
-def phase_section(text, heading):
-    """The body of one `#### Phase X` branch of SKILL.md.
+def section(text, heading, where):
+    """The body of one section, from `heading` to the next heading of its level.
 
-    Scoped rather than whole-file: an instruction that drifts into a
-    neighbouring phase would still satisfy a search over the whole document,
-    which is the drift this scan exists to catch.
+    Scoped rather than whole-file. An instruction that drifts into a
+    neighbouring section still satisfies a search over the whole document, so a
+    whole-file check cannot tell "documented here" from "documented somewhere",
+    which is the only thing these criteria actually ask.
     """
     start = text.find(heading)
     if start < 0:
-        raise AssertionError(f"SKILL.md: the branch anchored on {heading!r} is gone")
-    end = text.find("\n#### ", start + 1)
-    return text[start:end if end > 0 else len(text)]
+        raise AssertionError(f"{where}: the section anchored on {heading!r} is gone")
+    # Ends at the next heading of the same level *or shallower*. Stopping only
+    # at the same level would run a last-child section to end of file, which is
+    # no scope at all - the one `#### Phase H` hit before this was fixed.
+    level = len(heading) - len(heading.lstrip("#"))
+    rest = text[start + len(heading):]
+    ends = [found for found in
+            (rest.find("\n" + "#" * depth + " ") for depth in range(1, level + 1))
+            if found >= 0]
+    return heading + rest[:min(ends)] if ends else heading + rest
+
+
+def collapsed(text):
+    """`text` with line continuations and indentation flattened to one space.
+
+    A criterion that names a whole command is not met by the flag appearing in
+    a nearby sentence, and the command itself is wrapped across lines with a
+    backslash. Flattening lets the assertion be the command.
+    """
+    return re.sub(r"\s*\\?\s+", " ", text)
+
+
+def table_row(text, prefix, where):
+    """The one table row starting with `prefix`."""
+    for line in text.splitlines():
+        if line.startswith(prefix):
+            return line
+    raise AssertionError(f"{where}: the table row starting {prefix!r} is gone")
 
 
 class GateAttemptHasADocumentedWriter(unittest.TestCase):
@@ -421,10 +489,10 @@ class GateAttemptHasADocumentedWriter(unittest.TestCase):
         )
 
     def test_the_call_sits_in_the_phase_that_runs_the_gate(self):
-        body = phase_section(read_shipped("SKILL.md"), "#### Phase B - Execute one batch")
+        body = section(read_shipped("SKILL.md"), "#### Phase B - Execute one batch", "SKILL.md")
         self.assertIn(
-            "--gate-attempt",
-            body,
+            "update_loop.py <feature> --root <root> --gate-attempt",
+            collapsed(body),
             "SKILL.md does not record a failed gate in Phase B, the only phase "
             "that runs one",
         )
@@ -456,7 +524,7 @@ class GateAttemptHasADocumentedWriter(unittest.TestCase):
     def test_the_section_scan_stops_at_the_next_phase(self):
         # A scan that ran to the end of the file would pass on a mention in any
         # later branch, which is exactly the drift it is meant to catch.
-        body = phase_section(read_shipped("SKILL.md"), "#### Phase B - Execute one batch")
+        body = section(read_shipped("SKILL.md"), "#### Phase B - Execute one batch", "SKILL.md")
         self.assertIn("checkpoint.py", body)
         self.assertNotIn("#### Phase V", body)
 
