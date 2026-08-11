@@ -225,7 +225,7 @@ T6 → T7 → T8
 
 ---
 
-### T6: Name `--resume` as the writer that clears `halt`
+### T6: Name `--resume` as the writer that clears `halt` ✅
 
 **What**: Document `--resume` as the writer of the `halt` field in the state schema, so the machine-owned rule and the halt-clearing rule stop contradicting each other.
 **Where**: `references/state-schema.md`

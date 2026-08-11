@@ -10,7 +10,10 @@ than a truncated one.
 
 **The file is machine-owned.** Do not hand-edit it. Deleting it costs
 everything in it except task completion, which lives in git. The full bill is
-[below](#what-deleting-the-file-costs); it is larger than it looks.
+[below](#what-deleting-the-file-costs); it is larger than it looks. Every
+transition a human needs has a flag on `update_loop.py`, including the one
+that lifts a halt - see [`halt`](#halt). Reaching for an editor means the
+flag is missing, which is a bug worth reporting, not a file worth editing.
 
 **It is not committed.** Add `.specs/features/**/loop.json` to the project's
 `.gitignore`. Nothing in it belongs to the project: it is one run's private
@@ -266,6 +269,28 @@ gate passes first time never appears.
 
 A recorded halt outranks everything: `detect_phase.py` checks it before it
 describes any work, so a halted run never dispatches another batch.
+
+It is cleared by one command and no other:
+
+```bash
+python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> \
+  --resume --detail "<why the run may continue>"
+```
+
+`--resume` writes both fields back to `null`, returns `status` to `active`,
+and records the transition in `iterations[]`. Everything else is left alone
+on purpose: `counters` in particular, because a resume that zeroed
+`gate_attempts` would turn every halt into an unlimited retry budget. So a
+halt derived from a condition that still holds - attempts still over the
+limit, iterations still without a commit - is printed again by the very next
+`detect_phase.py`. Resolve the cause, or change the config that tripped the
+limit; `--resume` is what makes the run continue afterwards, not a way past
+the limit.
+
+`--resume` is refused on a run recorded `complete`, and on one with no halt
+to clear. Both exit 2 and write nothing. Note that it does **not** require
+`status` to be `halted`: an `active` run still carrying a `halt.reason` is
+resumable, because that is the state a bare `--status active` leaves behind.
 
 | `reason` | Fires when |
 | --- | --- |
