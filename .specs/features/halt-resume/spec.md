@@ -26,11 +26,11 @@ unrecoverable halt with an empty counter appears.
 
 ## Goals
 
-- [ ] A recorded halt can be lifted through the single writer, with the
+- [x] A recorded halt can be lifted through the single writer, with the
       objective, counters, Verify state, and iteration history intact.
-- [ ] A halt whose cause still holds re-fires on the next detection, so
+- [x] A halt whose cause still holds re-fires on the next detection, so
       resuming is not a way to bypass a limit.
-- [ ] `counters.gate_attempts` has exactly one documented writer, so
+- [x] `counters.gate_attempts` has exactly one documented writer, so
       `limits.gate_attempts_per_task` bounds something real.
 
 ## Out of Scope
@@ -149,12 +149,12 @@ confirm the parity suite flags a planted reintroduction.
 
 | Requirement ID | Story | Covers | Phase | Status |
 | -------------- | ----- | ------ | ----- | ------ |
-| RESUME-01 | P1: Lift a recorded halt | P1 AC 1, 2, 8 - the transition itself and its flag registration | T1 | Implementing |
-| RESUME-02 | P1: Lift a recorded halt | P1 AC 3, 4 - preservation of state and the audit entry | T2 | Implementing |
-| RESUME-03 | P1: Lift a recorded halt | P1 AC 5, 6, 7 - the three refusals, each leaving the file untouched | T1 | Implementing |
-| RESUME-04 | P1: Lift a recorded halt | P1 AC 9, 10 - derived conditions re-evaluated after a resume | T3 | Implementing |
-| RESUME-05 | P2: Give `gate_attempts` a documented writer | P2 AC 1-4 - the documented writer and its parity guard | T4, T5 | Implementing |
-| RESUME-06 | P3: Document the resume transition | P3 AC 1-4 - the prose agreeing with the behavior | T6, T7, T8 | Implementing |
+| RESUME-01 | P1: Lift a recorded halt | P1 AC 1, 2, 8 - the transition itself and its flag registration | T1 | Verified |
+| RESUME-02 | P1: Lift a recorded halt | P1 AC 3, 4 - preservation of state and the audit entry | T2 | Verified |
+| RESUME-03 | P1: Lift a recorded halt | P1 AC 5, 6, 7 - the three refusals, each leaving the file untouched | T1 | Verified |
+| RESUME-04 | P1: Lift a recorded halt | P1 AC 9, 10 - derived conditions re-evaluated after a resume | T3 | Verified |
+| RESUME-05 | P2: Give `gate_attempts` a documented writer | P2 AC 1-4 - the documented writer and its parity guard | T4, T5 | Verified |
+| RESUME-06 | P3: Document the resume transition | P3 AC 1-4 - the prose agreeing with the behavior | T6, T7, T8 | Verified |
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
@@ -164,7 +164,7 @@ confirm the parity suite flags a planted reintroduction.
 
 ## Success Criteria
 
-- [ ] The reproduction in the defect report ends at a work phase instead of `phase=H`, with `objective`, `counters`, and `iteration` unchanged from before the halt.
-- [ ] A run halted by a still-true derived condition re-halts on the detection following a resume.
-- [ ] `python3 -m unittest discover -s scripts -p 'test_*.py'` passes with the new cases included.
-- [ ] No shipped document instructs a reader to clear `halt.reason` by hand.
+- [x] The reproduction in the defect report ends at a work phase instead of `phase=H`, with `objective`, `counters`, and `iteration` unchanged from before the halt.
+- [x] A run halted by a still-true derived condition re-halts on the detection following a resume.
+- [x] `python3 -m unittest discover -s scripts -p 'test_*.py'` passes with the new cases included.
+- [x] No shipped document instructs a reader to clear `halt.reason` by hand.
