@@ -367,6 +367,27 @@ HAND_CLEARED_HALT = (
 )
 
 
+def assert_instructs(case, scope, command, where, fenced=True):
+    """Assert `scope` tells the reader to run `command`, and does not warn them off.
+
+    `fenced=False` is for a criterion whose artifact is an inline mention in a
+    table cell, where requiring a block would fail a correct document.
+    """
+    haystack = collapsed(fenced_commands(scope) if fenced else scope)
+    case.assertIn(
+        command,
+        haystack,
+        f"{where} does not carry {command!r}"
+        + (" as a fenced call; a mention in prose is not an instruction" if fenced else ""),
+    )
+    marker = negated_by(scope, command)
+    case.assertIsNone(
+        marker,
+        f"{where} carries {command!r} but the clause introducing it says "
+        f"{marker!r}, so it reads as a warning rather than an instruction",
+    )
+
+
 class ClearingAHaltHasOneSupportedRoute(unittest.TestCase):
     """RESUME-06: the prose points at the flag, never at an editor."""
 
@@ -406,31 +427,25 @@ class ClearingAHaltHasOneSupportedRoute(unittest.TestCase):
             "| `H` |",
             "references/phase-transitions.md",
         )
-        self.assertIn(
-            "update_loop.py --resume",
-            row,
-            "the H transition row says how a halt clears without naming the "
-            "command that clears it",
+        assert_instructs(
+            self, row, "update_loop.py --resume",
+            "the H transition row", fenced=False,
         )
 
     def test_the_halt_field_section_names_the_command(self):
         body = section(
             read_visible("references/state-schema.md"), "## `halt`", "references/state-schema.md"
         )
-        self.assertIn(
-            "update_loop.py <feature> --root <root> --resume",
-            collapsed(fenced_commands(body)),
-            "the `halt` field section does not carry the command that clears it "
-            "as a fenced call; a mention in prose is not an instruction",
+        assert_instructs(
+            self, body, "update_loop.py <feature> --root <root> --resume",
+            "the `halt` field section",
         )
 
     def test_the_halt_phase_names_the_command(self):
         body = section(read_visible("SKILL.md"), "#### Phase H - Halt", "SKILL.md")
-        self.assertIn(
-            "update_loop.py <feature> --root <root> --resume",
-            collapsed(fenced_commands(body)),
-            "Phase H does not carry the command a human runs to lift the halt "
-            "it just recorded; naming the flag in passing is not the same thing",
+        assert_instructs(
+            self, body, "update_loop.py <feature> --root <root> --resume",
+            "Phase H",
         )
 
     def test_a_commented_out_block_does_not_count_as_documentation(self):
@@ -469,6 +484,103 @@ class ClearingAHaltHasOneSupportedRoute(unittest.TestCase):
         decoyed = transitions.replace("| `H` |", "| `H` | a decoy |\n| `H` |", 1)
         with self.assertRaises(AssertionError):
             table_row(decoyed, "| `H` |", "references/phase-transitions.md")
+
+
+class ANegatedCommandIsNotAnInstruction(unittest.TestCase):
+    """INTENT-03: a call the prose warns against is not a call being given.
+
+    Probes P1 and P1b from the halt-resume verifier: the fenced command left
+    exactly where it was, with the sentence above it inverted. Both left the
+    suite green while the document told the reader to do the opposite.
+
+    **The limit, stated rather than discovered later.** This matches a fixed
+    list of negated imperatives. A negation phrased outside the list still
+    reads as an instruction. The check narrows the hole; it does not close it.
+    """
+
+    COMMAND = "update_loop.py <feature> --root <root> --resume"
+
+    def phase_h(self, intro=None):
+        skill = read_visible("SKILL.md")
+        if intro is None:
+            return skill
+        old = ("A human resolves the cause, or changes the config that\n"
+               "   tripped a limit, and then lifts the halt:")
+        self.assertIn(old, skill, "the Phase H lead-in moved; update this probe")
+        return skill.replace(old, intro)
+
+    def test_the_shipped_phase_h_is_affirmative(self):
+        body = section(self.phase_h(), "#### Phase H - Halt", "SKILL.md")
+        self.assertIsNone(negated_by(body, self.COMMAND))
+
+    def test_a_never_run_lead_in_is_caught(self):
+        # Probe P1.
+        body = section(
+            self.phase_h("Never run this, it is not a supported operation:"),
+            "#### Phase H - Halt", "SKILL.md",
+        )
+        self.assertEqual(negated_by(body, self.COMMAND), "never run")
+
+    def test_an_inverted_instruction_is_caught(self):
+        # Probe P1b: the destructive route recommended, the real one forbidden.
+        body = section(
+            self.phase_h(
+                "A human deletes `loop.json` and starts over. "
+                "Whatever you do, never run:"
+            ),
+            "#### Phase H - Halt", "SKILL.md",
+        )
+        self.assertEqual(negated_by(body, self.COMMAND), "never run")
+
+    def test_a_negation_in_an_earlier_sentence_does_not_flag(self):
+        # The Phase B timeout instruction says "do not retry" about something
+        # else on its way to a call the reader must make. A window-based scan
+        # flags it; a clause-based one does not.
+        body = section(
+            read_visible("SKILL.md"), "#### Phase B - Execute one batch", "SKILL.md"
+        )
+        self.assertIn("do not retry", body)
+        self.assertIsNone(
+            negated_by(body, "update_loop.py <feature> --root <root> \\\n     --halt executor")
+        )
+
+    def test_an_affirmative_copy_rescues_a_negated_one(self):
+        body = section(
+            self.phase_h("Never run this:"), "#### Phase H - Halt", "SKILL.md"
+        )
+        rescued = body + (
+            "\nLift the halt with:\n\n```bash\n"
+            "python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> --resume\n"
+            "```\n"
+        )
+        self.assertIsNone(negated_by(rescued, self.COMMAND))
+
+    def test_the_vocabulary_is_verb_specific(self):
+        # A bare negation word would fail valid prose; every entry has to end
+        # in the verb it forbids, which is what keeps "not a flake" harmless.
+        for marker in NEGATED_IMPERATIVES:
+            self.assertIn(marker.split()[-1], IMPERATIVE_VERBS, marker)
+            self.assertGreater(len(marker.split()), 1, marker)
+
+    def test_the_vocabulary_flags_no_fence_in_any_shipped_document(self):
+        # The guard against a later addition quietly breaking valid prose.
+        offenders = []
+        for relative, text in markdown_documents():
+            lines = visible(text).splitlines()
+            for number, line in enumerate(lines):
+                if not line.lstrip().startswith("```"):
+                    continue
+                intro = " ".join(lines[max(0, number - 4):number]).lower()
+                clause = intro.rsplit(". ", 1)[-1]
+                for marker in NEGATED_IMPERATIVES:
+                    if marker in clause:
+                        offenders.append(f"{relative}:{number + 1} ({marker!r})")
+        self.assertEqual(
+            offenders,
+            [],
+            "these shipped fences read as negated by the vocabulary; either the "
+            "prose is wrong or the vocabulary is too broad:\n" + "\n".join(offenders),
+        )
 
 
 class AnInstructionLivesInAFence(unittest.TestCase):
@@ -621,6 +733,50 @@ def section(text, heading, where):
     return "".join(lines[start:end])
 
 
+#: Negated imperatives that turn a fenced call into a warning about it. The
+#: list is verb-specific on purpose, and that is measured rather than assumed:
+#: `rather than` introduces three fences affirmatively, and `SKILL.md` step 1 of
+#: Phase B introduces a correct `--halt executor` call with "do not retry - a
+#: timeout is an executor failure, not a flake:". A list of bare negation words
+#: would fail four valid documents the day it shipped.
+#:
+#: This narrows the hole; it does not close it. A negation phrased outside the
+#: list ("this call was removed in 0.4:") still reads as an instruction to the
+#: guard. Substring parity cannot read intent, and pretending otherwise is
+#: worse than recording the limit.
+IMPERATIVE_VERBS = ("run", "call", "invoke", "use", "pass")
+
+NEGATED_IMPERATIVES = tuple(
+    f"{negation} {verb}"
+    for negation in ("never", "do not", "don't")
+    for verb in IMPERATIVE_VERBS
+)
+
+
+def negated_by(text, command):
+    """The negated imperative introducing `command`, or None.
+
+    Only the clause after the final `". "` before the occurrence is read. A
+    wider window flags the Phase B timeout instruction, which says "do not
+    retry" about something else on its way to a call the reader must make.
+
+    One affirmative occurrence is enough: a section that warns against a call
+    in one place and gives it in another still documents the supported route,
+    so this returns None as soon as it finds one that nothing negates.
+    """
+    found = None
+    lines = text.splitlines()
+    for number, _ in enumerate(lines):
+        if command not in collapsed(" ".join(lines[number:number + 3])):
+            continue
+        clause = " ".join(lines[max(0, number - 4):number]).lower().rsplit(". ", 1)[-1]
+        marker = next((m for m in NEGATED_IMPERATIVES if m in clause), None)
+        if marker is None:
+            return None
+        found = found or marker
+    return found
+
+
 def fenced_commands(text):
     """Only the lines of `text` that sit inside a fenced block.
 
@@ -685,11 +841,9 @@ class GateAttemptHasADocumentedWriter(unittest.TestCase):
 
     def test_the_call_sits_in_the_phase_that_runs_the_gate(self):
         body = section(read_visible("SKILL.md"), "#### Phase B - Execute one batch", "SKILL.md")
-        self.assertIn(
-            "update_loop.py <feature> --root <root> --gate-attempt",
-            collapsed(fenced_commands(body)),
-            "SKILL.md does not record a failed gate in Phase B, the only phase "
-            "that runs one",
+        assert_instructs(
+            self, body, "update_loop.py <feature> --root <root> --gate-attempt",
+            "Phase B, the only phase that runs a gate",
         )
 
     def test_the_recovery_loop_carves_the_exception_in_both_rules(self):

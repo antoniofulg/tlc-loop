@@ -22,9 +22,9 @@ thing the feature exists to prevent, and the suite reports PASS.
 
 ## Goals
 
-- [ ] A command inside an HTML comment, or present only in prose, no longer satisfies a guard that asserts an instruction.
-- [ ] A fenced command introduced by a negated imperative fails its guard, naming the marker.
-- [ ] A `#` inside a fenced block no longer truncates a section scope.
+- [x] A command inside an HTML comment, or present only in prose, no longer satisfies a guard that asserts an instruction.
+- [x] A fenced command introduced by a negated imperative fails its guard, naming the marker.
+- [x] A `#` inside a fenced block no longer truncates a section scope.
 
 ## Out of Scope
 
@@ -117,18 +117,18 @@ block and confirm the Phase H guard still passes and still stops at `### Step 3`
 | -------------- | ----- | ------ | ----- | ------ |
 | INTENT-01 | P1: A guard rejects a document that does not instruct | P1 AC 1, 2 - HTML comments are invisible to every command guard | T1 | Implementing |
 | INTENT-02 | P1: A guard rejects a document that does not instruct | P1 AC 3, 7 - a fenced-artifact guard requires a fence; an inline guard does not | T3 | Implementing |
-| INTENT-03 | P1: A guard rejects a document that does not instruct | P1 AC 4, 5, 6 - the negated-imperative vocabulary and the clause it reads | Tasks | Pending |
+| INTENT-03 | P1: A guard rejects a document that does not instruct | P1 AC 4, 5, 6 - the negated-imperative vocabulary and the clause it reads | T4 | Implementing |
 | INTENT-04 | P2: A fenced `#` does not truncate a scope | P2 AC 1, 2, 3 - the section scan skips fenced lines | T2 | Implementing |
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 4 total, 0 mapped to tasks, 4 unmapped ⚠️
+**Coverage:** 4 total, 4 mapped to tasks, 0 unmapped
 
 ---
 
 ## Success Criteria
 
-- [ ] Re-running the verifier's P1, P1b and P2 probes kills all three.
-- [ ] Re-running the P7 probe no longer fails a harmless edit.
-- [ ] `python3 -m unittest discover -s scripts -p 'test_*.py'` passes with no shipped document changed.
-- [ ] The negation vocabulary matches no fence in any shipped document, asserted by a test.
+- [x] Re-running the verifier's P1, P1b and P2 probes kills all three.
+- [x] Re-running the P7 probe no longer fails a harmless edit.
+- [x] `python3 -m unittest discover -s scripts -p 'test_*.py'` passes with no shipped document changed.
+- [x] The negation vocabulary matches no fence in any shipped document, asserted by a test.

@@ -10,7 +10,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 **Spec**: `.specs/features/parity-intent/spec.md`
 **Design**: none - no architectural decision. Four helpers in one existing test module, built on the `_fenced()` line scan already there.
-**Status**: Draft
+**Status**: Done - all 4 tasks committed
 
 ---
 
@@ -157,7 +157,7 @@ T3 → T4
 
 ---
 
-### T4: Reject a command its introducing clause negates
+### T4: Reject a command its introducing clause negates ✅
 
 **What**: Add the negated-imperative vocabulary and a `negated_by()` helper reading the clause before the fence, and fail the four command guards when it matches.
 **Where**: `scripts/test_unit_docs_parity.py`
@@ -249,7 +249,7 @@ No task carries `Tests: none`. Each helper's discrimination test - the planted m
 | --- | --- | --- |
 | INTENT-01 | T1 | Verified in T1 |
 | INTENT-02 | T3 | Verified in T3 |
-| INTENT-03 | T4 | Pending |
+| INTENT-03 | T4 | Verified in T4 |
 | INTENT-04 | T2 | Verified in T2 |
 
 **Coverage:** 4 total, 4 mapped to tasks, 0 unmapped.
