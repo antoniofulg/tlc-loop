@@ -167,7 +167,7 @@ T6 → T7 → T8
 
 ---
 
-### T4: Record a failed gate attempt in Phase B
+### T4: Record a failed gate attempt in Phase B ✅
 
 **What**: Add the Phase B step that calls `update_loop.py --gate-attempt <TN>` when a task's gate fails, and the parity test that fails naming `SKILL.md` if the instruction is removed.
 **Where**: `SKILL.md`

@@ -245,7 +245,17 @@ stage from a phase title.
    the gate commands, `coding-principles.md` from the sibling skill, the
    evidence path, and the "do not commit" rule stated verbatim.
 3. **Verify the evidence**, then **re-run the gate yourself**. A reported gate
-   result is a claim about a command; run the command.
+   result is a claim about a command; run the command. A gate that fails is
+   recorded once per failed attempt, **before** you repair anything:
+   ```bash
+   python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> --gate-attempt T7
+   ```
+   This is the one counter a repairable failure moves, and the single
+   exception [recovery-loop.md](references/recovery-loop.md) carves out of its
+   "no counter moves" rule. It is what `limits.gate_attempts_per_task` bounds:
+   skip it and `counters.gate_attempts` stays empty, the limit never fires, and
+   a task whose diagnosis is wrong is repaired forever. Record it, then enter
+   the repair loop.
 4. **Checkpoint each task, in order.**
    ```bash
    python3 <skill-dir>/scripts/checkpoint.py <feature> --root <root> \

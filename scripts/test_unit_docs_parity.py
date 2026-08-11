@@ -333,6 +333,54 @@ class StageRoutingContractParity(unittest.TestCase):
         self.assertIn("validate_routing.py", readme)
 
 
+def phase_section(text, heading):
+    """The body of one `#### Phase X` branch of SKILL.md.
+
+    Scoped rather than whole-file: an instruction that drifts into a
+    neighbouring phase would still satisfy a search over the whole document,
+    which is the drift this scan exists to catch.
+    """
+    start = text.find(heading)
+    if start < 0:
+        raise AssertionError(f"SKILL.md: the branch anchored on {heading!r} is gone")
+    end = text.find("\n#### ", start + 1)
+    return text[start:end if end > 0 else len(text)]
+
+
+class GateAttemptHasADocumentedWriter(unittest.TestCase):
+    """RESUME-05: `counters.gate_attempts` is written by exactly one step.
+
+    `limits.gate_attempts_per_task` halts on this counter, so an instruction
+    set that never writes it leaves the limit bounding nothing. That is how a
+    `gate_stuck` halt arrives with an empty counter: the limit never fired, so
+    a human recorded the halt by hand.
+    """
+
+    def test_skill_md_names_the_call_that_records_a_failed_gate(self):
+        self.assertIn(
+            "--gate-attempt",
+            read_shipped("SKILL.md"),
+            "SKILL.md no longer names --gate-attempt, so counters.gate_attempts "
+            "has no documented writer and limits.gate_attempts_per_task bounds nothing",
+        )
+
+    def test_the_call_sits_in_the_phase_that_runs_the_gate(self):
+        body = phase_section(read_shipped("SKILL.md"), "#### Phase B - Execute one batch")
+        self.assertIn(
+            "--gate-attempt",
+            body,
+            "SKILL.md does not record a failed gate in Phase B, the only phase "
+            "that runs one",
+        )
+
+    def test_the_section_scan_stops_at_the_next_phase(self):
+        # A scan that ran to the end of the file would pass on a mention in any
+        # later branch, which is exactly the drift it is meant to catch.
+        body = phase_section(read_shipped("SKILL.md"), "#### Phase B - Execute one batch")
+        self.assertIn("checkpoint.py", body)
+        self.assertNotIn("#### Phase V", body)
+
+
 #: The two `[stages.*]` examples in the README, by something only that block
 #: contains. The Configuration block carries the runtime stages; the Quick start
 #: block carries the domain stages a reader copies first.
