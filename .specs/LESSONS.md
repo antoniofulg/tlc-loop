@@ -218,6 +218,18 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: mutant M23 / scripts/test_unit_docs_parity.py:376 (test-helpers)
 - last seen: 2026-08-11T17:01:49Z
 
+### L-035 - Hunt unfalsifiable tests by subtraction: any test the whole mutant battery never kills is a suspect, and the added-tests list is the set to check.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `testing` · harmful: 0
+- features: parity-intent
+- evidence: round-3 sensor: 68 mutants vs scripts/test_unit_docs_parity.py:1 (testing)
+- last seen: 2026-08-11T17:24:25Z
+
+### L-036 - Give every corpus-wide negative assertion a positive control that fails when the scan reaches no input; assertEqual(offenders, []) is green on an empty corpus.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `test-helpers` · harmful: 0
+- features: parity-intent
+- evidence: mutant F16 / scripts/test_unit_docs_parity.py:600 (test-helpers)
+- last seen: 2026-08-11T17:24:25Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

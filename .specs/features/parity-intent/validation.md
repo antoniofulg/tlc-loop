@@ -1,16 +1,393 @@
 # Parity Guards Prove Intent Validation
 
 **Spec**: `.specs/features/parity-intent/spec.md`
-**Verifier**: independent sub-agent (author ≠ verifier), rounds 1 and 2
+**Verifier**: independent sub-agent (author ≠ verifier), rounds 1, 2 and 3
 
 | Round | Date | Range | Verdict |
 | ----- | ---- | ----- | ------- |
 | 1 | 2026-08-11 | `928f53e..a82c10e` | FAIL - 8 ranked gaps |
 | 2 | 2026-08-11 | `a82c10e..3821649` (fix commit, test-only) | FAIL (narrow) - 5/5 claimed fixes verified, 2 Major test-integrity gaps survive |
+| 3 | 2026-08-11 | `3821649..9a6a9ba` (fix commit, test-only) | **PASS** - both Major gaps closed at guard level; 4 Minor survivors, none blocking |
 
 ---
 
-## Validation: FAIL
+## Validation: PASS
+
+**Round 3, final bounded iteration.** Both Major gaps round 2 raised are
+genuinely closed, verified at *guard* level with fresh attacks rather than by
+re-reading the diff:
+
+1. `test_a_nearby_negation_about_something_else_does_not_flag`
+   (`scripts/test_unit_docs_parity.py:535-554`) is **falsifiable**. Four
+   independent mutations kill it (`G1`, `G4`, `F10`, `M15`), and the two that
+   *should not* kill it - emptying the vocabulary (`G2`) and widening
+   `INTRO_LINES` to 20 (`G3`) - correctly do not. The precondition added at
+   `:549-553` is what carries the proof: the needle now has to match a fence
+   before the `assertIsNone` at `:554` is allowed to mean anything.
+2. `test_the_vocabulary_flags_no_fence_in_any_shipped_document` (`:677-698`)
+   now **runs the code it guards**. Round 2's headline demonstration is
+   reversed: `V1` (adding `"commit"` to `IMPERATIVE_VERBS`) made production flag
+   `SKILL.md` while the net reported zero; at this commit the same mutation
+   **fails the net by name**. `M2` (`INTRO_LINES` 4 -> 10), which survived the
+   whole round-2 suite, is likewise killed by the net now.
+
+Round-2 minor gaps E and F are closed as well. C, D and G survive and are
+Minor/Cosmetic test-coverage holes with correct behaviour underneath. Round-1
+Gaps 6, 7 and 8 remain latent at **0 shipped occurrences each**, and 6 and 8 are
+now recorded in `spec.md`'s Out of Scope table.
+
+**Diff surface**: `git diff 3821649..9a6a9ba --name-only` = `.specs/LESSONS.md`,
+`.specs/features/parity-intent/spec.md`, `.specs/features/parity-intent/validation.md`,
+`.specs/lessons.json`, `scripts/test_unit_docs_parity.py`. **No shipped document
+changed** across the whole branch (`git diff main..HEAD --name-only` touches
+`.specs/` and the one test module only). Real tree `git status --porcelain`
+empty before and after the sensor; `git worktree list` back to the primary tree;
+no `git stash` used.
+
+---
+
+### Round-2 Gap Disposition
+
+| Gap | Round-2 finding | Round-3 status | Evidence |
+| --- | --------------- | -------------- | -------- |
+| A (Major) | `test_a_negation_in_an_earlier_sentence_does_not_flag` unfalsifiable; carried the retracted claim | ✅ **Fixed** | Renamed and repaired at `:535-554`. Needle is now the collapsed form; `:549-553` `assertIn(command, collapsed(fenced_commands(body)))` proves it matches a fence before `:554` asserts anything. Sensors `G1` (add verb `retry`) and `G4` (negate the shipped Phase B intro) **kill the test**; `F10`, `M15`, `M10`, `M16` also kill it. The comment at `:536-543` no longer repeats the retracted window claim - `grep` for it over the module returns only accurate, explicitly-historical text |
+| B (Major) | AC-6 corpus net reimplemented the scan; could report clean while production flagged | ✅ **Fixed** | `fence_intro()` `:895-904` is the single definition; `negated_by` `:926` and the net `:689` both call it. Sensor `V1` → **net fails by name** (round 2: silent). `M2` (4→10) → **net fails** (round 2: survived). `M2c` (4→8) → net fails. `M24` (widen **and** re-decouple the net) → survives, which is the control proving the coupling is what kills `M2`. `F6` (make `fence_spans` treat every fence line as an opening - the old net's third bug) → killed by 8 tests. Re-derived independently: the corpus has **162 fence marker lines but 81 openings**; SKILL.md alone is 30 and 15, matching the comment at `:682` |
+| C (Minor) | Fence requirement unpinned through `assert_instructs` | ➖ **Not fixed** | `M23` (`:376` → `haystack = collapsed(scope)`) **survives** again. Behaviour is right and covered three ways - `A10` kills the guard, `:727-742` covers the helper, and the opposite mutation `F11` (haystack always fenced) is killed - but the presence half of `assert_instructs` still has no direct test. One `assertRaises` away |
+| D (Minor) | Inline "preceding text" anchor unpinned | ➖ **Not fixed** | `M21` (`:932` `(line.split(command,1)[0], line)` → `(line, line)`) **survives**. New probe `D1` (a `never run` placed *after* the command in the shipped `H` row) also survives - out of scope by `spec.md:116`, which says *preceding*, so the behaviour is as specified; only the pin is missing |
+| E (Minor) | `INTRO_LINES` had a floor but no ceiling | ✅ **Closed (bounded)** | The corpus net now supplies the ceiling. Measured through the production helpers: 0 offenders at widths 2-6, **1 at width 8** (`SKILL.md:102`, `never pass`), 2 at width 20. `M1` (4→3) killed by `:585-598`; `M2c` (4→8), `M2` (4→10), `M2b` (4→40) all killed by the net. `M2d` (4→5) survives - the corpus cannot distinguish 4 from 5-6, which is a property of the documents, not a hole in the check. `spec.md:40` states exactly this and is now true |
+| F (Minor) | `fence_spans()`' unterminated branch unfalsifiable | ✅ **Fixed** | `test_an_unterminated_fence_runs_to_the_end` `:646-653` pins both halves: `:651` `assertEqual(fence_spans(lines), [(1, len(lines))])` and `:653` `assertEqual(negated_by(doc, "thing --flag"), "never run")` on an unterminated document. `M13` (delete `:890-891`) → **killed** (round 2: survived). The docstring claim at `:878-879` that `_fenced()` already assumes this was checked and is accurate |
+| G (Cosmetic) | Inline branch's fence exclusion unpinned | ➖ **Not fixed** | `M22` (drop `number not in inside` at `:934`) **survives**. No shipped inline guard has a fence in its scope |
+
+---
+
+### Spec-Anchored Acceptance Criteria
+
+All `file:line` refer to `scripts/test_unit_docs_parity.py` at `9a6a9ba` unless stated.
+
+#### P1: A guard rejects a document that does not instruct
+
+| Criterion | Spec-defined outcome | `file:line` + assertion | Result |
+| --------- | -------------------- | ----------------------- | ------ |
+| AC 1 - ignore every `<!-- ... -->` span, incl. multi-line | every span removed | impl `:302` `re.sub(r"<!--.*?(?:-->\|\Z)", "", text, flags=re.DOTALL)`; `:795` `assertEqual(visible("keep <!-- drop --> keep"), "keep  keep")`; `:798` `assertEqual(visible("a\n<!-- one\ntwo\nthree -->\nb"), "a\n\nb")`; `:815` `assertNotIn("<!--", stripped)`. Sensors `M9` (no-op) killed 5, `M10` (strip-all) killed 20 incl. all four guards, `F14` (drop `re.DOTALL`) killed 4 | ✅ PASS |
+| AC 2 - command only inside a comment ⇒ guard fails, naming the document | fail + document named | `:459` `assertNotIn("update_loop.py <feature> --root <root> --resume", collapsed(scoped))`. **All four guards now proven at guard level**: `P2` kills `test_the_halt_field_section_names_the_command`, `P2b` kills `test_the_halt_phase_names_the_command`, `P2c` kills `test_the_transition_row_names_the_command`, `P2d` kills `test_the_call_sits_in_the_phase_that_runs_the_gate` | ⚠️ Precision (carried, 3rd round) - fails correctly; the message at `:380` names the **scope** (`"the \`halt\` field section"`), not the document path |
+| AC 3 - fenced-artifact guard fails when the command is prose-only | fail + document named | impl `:376` `haystack = collapsed(fenced_commands(scope) if fenced else scope)`; `:712` `assertNotIn("thing --flag", fenced_commands(self.DOC))`; `:739-742` `assertNotIn(cmd, collapsed(fenced_commands(rescoped)))`. Sensor `A10` (Phase H block de-fenced) → **guard killed**; `M12` killed by 3 tests; `F11` (haystack always fenced) killed by 2 | ⚠️ Precision - behaviour correct, `M23` still survives (Gap C) |
+| AC 4 - negated introducing clause ⇒ guard fails, naming the marker | fail + marker named | impl `:383-388`; `:522` `assertEqual(negated_by(body, self.COMMAND), "never run")`; `:533` same for P1b; `:623` one-line variant; `:598` wrapped variant. Sensors `P1`, `P1b`, `N5`, `N7`, `N8` → **guard killed** in every case; `M4`/`M5` kill 10-11 tests | ✅ PASS |
+| AC 5 - anchor the lookbehind to the command's own fence opener, or to the text preceding it on its line | anchored, not scan-relative | impl `:907-943`; fenced anchor `:925-928` via `fence_intro()` `:895-904`; inline anchor `:932`; `:623`, `:629`. **Non-vacuity**: `M19` restores the pre-fix scan-anchored + clause-split `negated_by` verbatim → kills 8 tests; `F1` (`fence_intro` → `""`) kills 9; `F2` (window narrowed by one) kills `:585`; `F4` (window read *below* the fence) kills 9; `M20` killed | ⚠️ Precision - the fenced half is strongly pinned; the inline half's "text **preceding** it" still is not (`M21`, `D1` survive) |
+| AC 6 - vocabulary verb-specific **and** flags no shipped fence | 0 offenders; verb-specific only | verb-specific: `:570-574` `SPELLED_OUT` written out, `:583` `assertEqual(sorted(self.SPELLED_OUT), sorted(NEGATED_IMPERATIVES))`, `:579` `assertEqual(negated_by(doc, "thing --flag"), marker, marker)` for all 15 - `M3` kills both. flags-none: `:693-698` `assertEqual(offenders, [], ...)` computed at `:688-692` **through `fence_spans()` + `fence_intro()`**. Positive control `:600-616` asserts a bare-word list *does* flag, and `F16` (make the corpus iterator yield nothing) kills it, so the net is proven to be reading real text. Sensors `V1`, `M2`, `M2b`, `M2c`, `M20`, `P1`, `N5`, `N7`, `N8`, `G1`, `G3` all fail the net | ✅ PASS - round-2 Gap B closed |
+| AC 7 - inline guard applies criteria 1, 2, 4; does not require a fence | negation rejected on the inline mention | `:426` `read_visible(...)` (crit 1-2, pinned by `P2c`); `:432` `fenced=False`; `:629` `assertEqual(negated_by(row, "update_loop.py --resume", fenced=False), "never run")`; `:635-644` `with self.assertRaises(AssertionError)`; `:664-668` affirmative row accepted, killed by `F10` and `F11`. Sensor `N6` → **guard killed**; `M7` kills `:635` | ✅ PASS |
+
+#### P2: A fenced `#` does not truncate a scope
+
+| Criterion | Spec-defined outcome | `file:line` + assertion | Result |
+| --------- | -------------------- | ----------------------- | ------ |
+| AC 1 - section scan ignores lines inside fences | fenced lines skipped when locating the terminator | impl `:839-843` `fenced = _fenced(lines)` / `if number in fenced: continue`; `:761` `assertIn("more first-section text", body)`. Sensor `M11` (`fenced = set()`) killed 3 tests | ✅ PASS |
+| AC 2 - section still extends to the next real heading | reaches the next real heading, stops there | `:765-766` `assertNotIn("## second", body)` / `assertNotIn("other", body)`; `:769` `assertIn("# not a heading", section(...))`. Sensors `F12` (`depth <= level` → `depth < level`) and `F13` (invert the space check) **kill `:763-766`**; `M11`, `M15` kill the neighbours | ✅ PASS |
+| AC 3 - guards inside such a section still pass on the shipped documents | Phase H guard passes, scope still ends at `### Step 3` | `:777` injects `"# resolve the cause first\n"` at column 0; `:784-787` `assertIn(cmd, collapsed(fenced_commands(body)))`; `:788` `assertNotIn("### Step 3", body)`. Sensor `P7` (column-0 `#` in the shipped file) **survives** - correct, no false positive; `M11`/`M15` kill this test | ✅ PASS |
+
+**Status**: 7 ✅ PASS, 3 ⚠️ precision, 0 ❌ GAP across 10 criteria
+(round 1: 3/4/3; round 2: 4/3/1).
+
+---
+
+### Edge Cases
+
+- [x] **Unterminated `<!--` hides the remainder** - `:302` `(?:-->|\Z)`; `:803` `assertEqual(visible("shown\n<!-- swallowed\nalso swallowed"), "shown\n")`. `M9`, `M10`, `F14` killed.
+- [x] **Command in a comment *and* in a live fenced block ⇒ pass** - `:468` `assertIn("update_loop.py <feature> --root <root> --resume", collapsed(scoped))`. `M10`, `M16`, `R4` killed.
+- [x] **No fenced block at all ⇒ fail, not raise** - `:946-963` returns `""`; `:718` `assertEqual(fenced_commands("## s\n\njust prose, no block\n").strip(), "")`; end-to-end via `A10`. ⚠️ same scope-vs-path naming caveat as AC 2.
+- [x] **Negated fence + a second affirmative instance ⇒ pass** - `:556-565`, `:565` `assertIsNone(negated_by(rescued, self.COMMAND))`. `M6` (drop the affirmative short-circuit), `M2b`, `M20`, `F10` all kill it.
+- [x] **Vocabulary matches no fence in any shipped document, asserted by a test** - `:677-698`, now through the production helpers. **Round-2 Gap B closed**: `V1` and `M2` both fail it. Re-derived independently: 0 offenders at `INTRO_LINES=4`.
+- [x] **Prose must not rescue a negated fence** - `:670-675`; `:655-662` through `assert_instructs`. `N7` → guard killed; `M8` kills `:655`.
+- [x] **A negation up to `INTRO_LINES` lines above the fence is still read** - `:585-598`. `M1` (4→3) and `F2` kill it. Ceiling now supplied by the corpus net (`M2c` at width 8).
+- [x] **Inline mention reads the text before the command on its line** - `:625-629`, `:631-633`. ⚠️ "before" is still unpinned (`M21`, `D1` survive) - Gap D.
+- [x] **Unterminated fence runs to the end** (new, `spec.md:38` records the `_fenced()` half as deliberately unfixed) - `:646-653`. `M13` kills it.
+
+---
+
+### Discrimination Sensor
+
+**Isolation**: one detached `git worktree add --detach` at `9a6a9ba`, removed
+with `git worktree remove --force`. Real tree `git status --porcelain` **empty
+before and empty after**; `git worktree list` shows only the primary tree; `git
+stash list` empty, no `git stash` used. Sensor run is valid.
+
+**Methodology - stale bytecode.** `scripts/__pycache__` is deleted before
+**every** run (`sensor.run()`), per the round-2 finding: CPython invalidates a
+`.pyc` on `(mtime, size)`, so a same-length mutation landing in the same mtime
+second is silently ignored, and the failure is one-directional - mutants look
+*covered* when they are not. The purge stays mandatory.
+
+**Scope note**: mutations are scored against `test_unit_docs_parity.py` alone;
+no other module imports it. Document mutations are scored at **guard level** -
+the named guard failing, not merely the suite going red.
+
+#### Original probes
+
+| # | Mutation | Expect | Result | Guard failed? |
+| - | -------- | ------ | ------ | ------------- |
+| P1 | Phase H intro → `"Never run this, it is not a supported operation:"` | kill | ✅ Killed | **YES** - `test_the_halt_phase_names_the_command` |
+| P1b | Phase H intro → `"A human deletes \`loop.json\` and starts over. Whatever you do, never run:"` | kill | ✅ Killed | **YES** - same guard |
+| P2 | `` ## `halt` `` block wrapped in an HTML comment | kill | ✅ Killed | **YES** - `test_the_halt_field_section_names_the_command` |
+| P7 | column-0 `# resolve the cause first` inside the Phase H fence | **survive** | ✅ Survived | n/a - correct, no false positive |
+
+#### Document attacks
+
+| # | Mutation | Expect | Result | Guard failed? |
+| - | -------- | ------ | ------ | ------------- |
+| P2b | Phase H bash block wrapped in an HTML comment | kill | ✅ Killed | **YES** - `test_the_halt_phase_names_the_command` |
+| P2c | `H` row's `` `update_loop.py --resume` `` wrapped in an HTML comment | kill | ✅ Killed | **YES** - `test_the_transition_row_names_the_command` |
+| P2d | Phase B `--gate-attempt` block wrapped in an HTML comment | kill | ✅ Killed | **YES** - `test_the_call_sits_in_the_phase_that_runs_the_gate` |
+| N5 | Phase H rewritten as a **one-line** command under `"Never run this:"` | kill | ✅ Killed | **YES** |
+| N6 | `H` row → `"Whatever you do, never run \`update_loop.py --resume\`."` | kill | ✅ Killed | **YES** |
+| N7 | affirmative prose mention added, fence negated | kill | ✅ Killed | **YES** |
+| N8 | `state-schema.md` → `"It was cleared by one command. Do not run:"` | kill | ✅ Killed | **YES** |
+| A10 | whole Phase H block moved into prose | kill | ✅ Killed | **YES** |
+| G4 | Phase B timeout intro genuinely negated (`"Never run this, it corrupts the state file:"`) | kill | ✅ Killed | **YES** - `test_a_nearby_negation_about_something_else_does_not_flag` **+** the AC-6 net. Gap A's repaired test is load-bearing |
+| N9 | `# never run the destructive variant; run this instead` **inside** the Phase H fence | **survive** | ✅ **Survived** | n/a - **round-2 false positive fixed**: the net reads fence *openings* now, not every fence line |
+| D1 | `H` row negation placed **after** the command | kill | Survived | n/a - out of scope by design (`spec.md:116` says *preceding*); Gap D |
+| N4 | negation outside the vocabulary (`"This call was removed in 0.4 and will error:"`) | kill | ⚠️ Guard green | NO - recorded residual risk, `spec.md:50`, `:496-499` |
+| N2 | command split across two abutting fences | kill | ❌ Survived (guard green) | NO - **round-1 Gap 7** still latent; 0 shipped adjacent fence pairs |
+| N3 | `<!--` inside the Phase H bash block | **survive** | ❌ Killed | **YES** - **round-1 Gap 8** still latent; 0 shipped occurrences, **now recorded** `spec.md:39` |
+| A2 | Phase H fence opened, closing `` ``` `` deleted | kill | ⚠️ Guard green | NO - **round-1 Gap 6** still latent; 0 shipped odd fence counts, **now recorded** `spec.md:38` |
+| V1 | `"commit"` added to `IMPERATIVE_VERBS` + `SPELLED_OUT` | AC-6 net fires | ✅ **Net fires** | **YES** - `test_the_vocabulary_flags_no_fence_in_any_shipped_document`. **Round-2 Gap B closed** (round 2: net silent) |
+
+#### Helper and constant mutations
+
+| # | Mutation | Result | Killed by |
+| - | -------- | ------ | --------- |
+| M1 | `INTRO_LINES` 4 → 3 | ✅ Killed | `test_a_negation_wrapped_over_several_lines_is_still_read` |
+| M2 | `INTRO_LINES` 4 → **10** | ✅ **Killed** | `test_the_vocabulary_flags_no_fence_in_any_shipped_document` - **round-2 Gap E closed** |
+| M2b | `INTRO_LINES` 4 → 40 | ✅ Killed | the net + `test_an_affirmative_copy_rescues_a_negated_one` |
+| M2c | `INTRO_LINES` 4 → 8 | ✅ Killed | the net (first corpus offender is at width 8) |
+| M2d | `INTRO_LINES` 4 → 5 | ❌ Survived | — corpus cannot separate 4 from 5-6; measured, not assumed |
+| M3 | `IMPERATIVE_VERBS` → `("run",)` | ✅ Killed | `test_every_spelled_out_marker_is_detected` + the agreement check |
+| M4 | `NEGATED_IMPERATIVES = ()` | ✅ Killed | 11 tests |
+| M5 | `negated_by()` → always `None` | ✅ Killed | 10 tests |
+| M6 | `negated_by()` ignores the affirmative short-circuit | ✅ Killed | `test_an_affirmative_copy_rescues_a_negated_one` |
+| M7 | `assert_instructs` forces `fenced=True` | ✅ Killed | `test_the_guard_itself_rejects_a_negated_inline_row` |
+| M8 | `assert_instructs` forces `fenced=False` | ✅ Killed | `test_the_guard_itself_rejects_a_negated_fence` |
+| M9 | `visible()` → `return text` | ✅ Killed | 5 tests |
+| M10 | `visible()` → `return ""` | ✅ Killed | 20 tests, incl. **all four guards** |
+| M11 | `section()` → `fenced = set()` | ✅ Killed | 3 tests |
+| M12 | `fenced_commands()` → `return text` | ✅ Killed | 3 tests |
+| M13 | `fence_spans()` drops the unterminated branch | ✅ **Killed** | `test_an_unterminated_fence_runs_to_the_end` - **round-2 Gap F closed** |
+| M14 | `table_row()` takes the first match | ✅ Killed | `test_each_scope_excludes_the_passage_that_follows_it` |
+| M15 | `_fenced()` → `return set()` | ✅ Killed | 11 tests, incl. 3 guards |
+| M16 | `collapsed()` → `return text` | ✅ Killed | 9 tests, incl. 2 guards |
+| M19 | restore the **pre-fix** (`a82c10e`) `negated_by` verbatim | ✅ Killed | 8 tests - AC 5 non-vacuous |
+| M20 | fenced intro window starts at line 0 | ✅ Killed | the net + `test_an_affirmative_copy_rescues_a_negated_one` |
+| M21 | inline intro `(line.split(command,1)[0], line)` → `(line, line)` | ❌ Survived | — Gap D |
+| M22 | inline branch drops the `number not in inside` fence exclusion | ❌ Survived | — Gap G |
+| M23 | `assert_instructs` haystack → `collapsed(scope)` | ❌ Survived | — Gap C |
+| M24 | *control*: `INTRO_LINES`=10 **and** the AC-6 net re-decoupled | Survives (correct) | — proves the coupling is what kills `M2` |
+
+#### Fresh attacks on `fence_intro()` and the last commit
+
+| # | Mutation | Result | Killed by |
+| - | -------- | ------ | --------- |
+| F1 | `fence_intro()` → `""` | ✅ Killed | 9 tests |
+| F2 | `fence_intro()` window narrowed by one line | ✅ Killed | `test_a_negation_wrapped_over_several_lines_is_still_read` |
+| F3 | `fence_intro()` also includes the fence opener line | ❌ Survived | — equivalent on this corpus: a `` ```lang `` line can hold no marker |
+| F4 | `fence_intro()` reads the lines **below** the opener | ✅ Killed | 9 tests |
+| F5 | `fence_spans()` closing index +1 | ❌ Survived | — inert: the extra line is the closing `` ``` `` and never removes a command from the body |
+| F6 | `fence_spans()` treats **every** fence line as an opening (the old net's bug, moved into production) | ✅ Killed | 8 tests |
+| F7 | *control*: AC-6 net re-decoupled (hardcoded `4` + clause split restored) | Survives (correct) | — identical output at `INTRO_LINES=4`; only `M24` separates them |
+| F8 | *control*: AC-6 net never appends an offender | Survives (circular) | — a test cannot test itself; the meaningful proof is `V1`/`M2` |
+| F9 | `fence_intro()` hardcodes `4` instead of `INTRO_LINES` | ❌ Survived | — literally equivalent at the shipped value |
+| F10 | `negated_by()` defaults to a marker when none matches ("always flag") | ✅ Killed | 9 tests, incl. all four guards |
+| F11 | `assert_instructs` haystack always fenced (inline exemption removed) | ✅ Killed | `test_the_guard_itself_accepts_an_affirmative_inline_row`, `test_the_transition_row_names_the_command` |
+| F12 | `section()` `depth <= level` → `depth < level` | ✅ Killed | `test_the_section_still_ends_at_the_real_heading` + 2 |
+| F13 | `section()` inverts the post-`#` space check | ✅ Killed | same + `test_a_shell_comment_in_phase_h_leaves_the_guard_passing` |
+| F14 | `visible()` loses `re.DOTALL` | ✅ Killed | 4 tests |
+| F16 | the corpus iterator yields no document | ✅ Killed | `test_a_bare_negation_list_would_flag_shipped_prose` - the AC-6 net's positive control |
+| G1 | `"retry"` added to `IMPERATIVE_VERBS` | ✅ Killed | `test_a_nearby_negation_about_something_else_does_not_flag` - **round-2 Gap A closed** |
+| G2 | `NEGATED_IMPERATIVES = ()` scored against the Gap-A test | Correctly green | — emptying the vocabulary can only remove flags; a negative assertion must not be sensitive to it |
+| G3 | `INTRO_LINES` → 20 scored against the Gap-A test | Correctly green | — and the comment at `:536-543` no longer claims width is what keeps it affirmative |
+
+#### Pre-existing guards (regression)
+
+| # | Mutation | Result | Killed by |
+| - | -------- | ------ | --------- |
+| R1 | drop `blast_radius` from the SKILL.md halt-reason list | ✅ Killed | `test_skill_md_enumerates_exactly_the_implemented_reasons` |
+| R2 | reintroduce `"disposable"` in `state-schema.md` | ✅ Killed | `test_no_shipped_document_repeats_a_retracted_claim` |
+| R4 | rename the `` ## `halt` `` heading | ✅ Killed | `test_the_halt_field_section_names_the_command` + 3 |
+| R6 | reintroduce `` clearing `halt.reason` `` in the `H` row | ✅ Killed | `test_no_shipped_document_sends_the_reader_to_the_field` |
+| R8 | remove `--gate-attempt` from Phase B | ✅ Killed | `test_skill_md_names_the_call_that_records_a_failed_gate` + 1 |
+
+**No pre-existing parity check was weakened: 5/5 regression mutants killed**
+(round 1: 8/8, round 2: 5/5).
+
+**Sensor depth**: P0-full, **68 mutations**
+**Outcome**: 55 killed, 13 survived. Of the survivors, **3 are correct**
+(`P7`, `N9`, `D1` - false-positive and out-of-scope probes that must not fire),
+**6 are equivalent or circular** (`F3`, `F5`, `F7`, `F8`, `F9`, `M24`), and
+**4 are genuine unexpected survivors** (`M21`, `M22`, `M23`, `M2d`). Separately,
+3 document attacks leave the guard green while the suite reddens (`N2`, `A2`,
+`N4`) and 1 is a false positive (`N3`) - all four are round-1 latents at 0
+shipped occurrences, and 3 of the 4 are now recorded in `spec.md` Out of Scope.
+
+Round-over-round: round 1 had 4 unexpected + 6 partial of 32; round 2 had 6
+survivors + 2 false positives + 1 silent net of 46; round 3 has **4 genuine
+survivors and 1 false positive of 68**, none of them a wrong answer - each is an
+unpinned branch or a corpus that cannot separate two values.
+
+---
+
+### Unfalsifiable-Test Hunt
+
+This is the feature's recurring defect (three found across rounds 1-2, all in
+test code), so round 3 hunted for it systematically rather than by reading.
+
+**Method**: 34 tests were added on this branch and 0 removed
+(`git show 700436c:scripts/test_unit_docs_parity.py` vs `HEAD`). The union of
+tests failed by all 68 mutations was subtracted from the module's 69 tests.
+27 came back never-killed; 24 of those are pre-existing checks this battery
+never targeted (config parity, README enumerations, retracted-claim scans).
+**Three of the 34 new tests were never killed**, and each was then attacked
+directly:
+
+| Test | Targeted mutation | Result |
+| ---- | ----------------- | ------ |
+| `test_an_affirmative_inline_mention_passes` `:631-633` | `F10` - `negated_by` defaults to a marker | ✅ Killed |
+| `test_the_guard_itself_accepts_an_affirmative_inline_row` `:664-668` | `F11` - haystack always fenced | ✅ Killed |
+| `test_the_section_still_ends_at_the_real_heading` `:763-766` | `F12`, `F13` - `section()` terminator relaxed | ✅ Killed |
+
+**Outcome: 0 unfalsifiable tests remain among the 34 this feature added.** Round
+1 found 2, round 2 found 1 carried; round 3 finds none.
+
+Two written claims were also checked against the code rather than accepted:
+
+- `:647-649` *"`_fenced()` already assumes this"* - verified: `_fenced()`'s
+  `inside` flag never resets, so an unclosed fence does run to EOF. **True.**
+- `:682` *"30 fence lines where only 15 open one"* - measured on SKILL.md:
+  30 marker lines, 15 openings. **True.** (Corpus-wide: 162 and 81.)
+
+---
+
+### Gate Check
+
+- **Gate command**: `rm -rf scripts/__pycache__ && python3 -m compileall -q scripts/ && bash -n scripts/loop.sh && python3 -m unittest discover -s scripts -p 'test_*.py'`
+- **Run 1**: **612 passed, 0 failed, 0 skipped** (134.7s), exit code 0
+- **Run 2**: **612 passed, 0 failed, 0 skipped** (136.3s), exit code 0
+- **Stability**: two independent runs, both with a purged `__pycache__`, identical results. No flake.
+- **Count**: round 2 `3821649` = 611 total / 68 in the parity module; round 3 `9a6a9ba` = **612 total / 69**. **Delta +1** (`test_an_unterminated_fence_runs_to_the_end`); 1 test renamed and repaired, **0 deleted**.
+- **Branch total**: `main` (`700436c`) 496 unit / 35 in the parity module → `HEAD` 69 in the parity module, **+34 tests, 0 removed**.
+
+---
+
+### Weakening Analysis (`3821649` → `9a6a9ba`)
+
+Nothing is weaker. The commit is test-only and every change is neutral or
+strengthening:
+
+| Change | Direction |
+| ------ | --------- |
+| `fence_intro()` extracted `:895-904`; `negated_by` `:926` calls it | **Neutral in behaviour, strengthening in structure** - identical window; the duplicate definition it replaces is gone. `F9` proves the extraction is behaviour-preserving |
+| AC-6 net `:688-692` rewritten onto `fence_spans()` + `fence_intro()` | **Strictly stronger** - was narrower than production (clause split, hardcoded 4) *and* wider in the wrong place (closing fences read as openings). `V1`, `M2` now fail it; `N9` no longer falsely fails it |
+| `test_a_negation_in_an_earlier_sentence_does_not_flag` → `test_a_nearby_negation_about_something_else_does_not_flag` `:535-554` | **Strictly stronger** - was unfalsifiable; `G1`, `G4`, `F10` now kill it. Renaming is honest: the old name described a claim the spec retracted |
+| `test_an_unterminated_fence_runs_to_the_end` `:646-653` added | **Stronger** - `M13` goes from survivor to killed |
+| `spec.md` Out of Scope + 3 rows (`:38-40`) | Neutral (documentation) - records `_fenced()`'s unterminated rule, `visible()` inside fences, and the `INTRO_LINES` ceiling |
+
+**Is the repaired Gap-A test a change-detector?** No. `:549-553` is a
+precondition, not an assertion about the vocabulary: it fails loudly if the
+shipped Phase B block ever stops matching the needle, which is precisely the
+silent failure that let the old version assert nothing for a round. The
+behavioural claim is `:554`, and `G1`/`G4` prove it discriminates.
+
+**Newly added unfalsifiable tests**: none.
+**Pre-existing unfalsifiable tests left in place**: none.
+
+---
+
+### Remaining Limits (accepted, recorded)
+
+Each of these is behaviour that is **correct today** with a test-coverage or
+exposure hole, not a wrong answer:
+
+| Item | Kind | Exposure | Recorded? |
+| ---- | ---- | -------- | --------- |
+| `M23` - fence requirement unpinned through `assert_instructs` (Gap C) | test coverage | behaviour covered by `A10`, `:727-742`, `F11` | not in `spec.md`; one `assertRaises` fixes it |
+| `M21`, `D1` - inline "preceding text" anchor unpinned (Gap D) | test coverage | `spec.md:116` scopes it to *preceding*; no shipped document has the shape | behaviour is as specified |
+| `M22` - inline branch's fence exclusion unpinned (Gap G) | test coverage | no shipped inline guard has a fence in scope | cosmetic |
+| `M2d` - corpus cannot separate `INTRO_LINES` 4 from 5-6 | measurement limit | floor 3 and ceiling 8 both pinned | `spec.md:40` |
+| `N3` - `visible()` strips `<!--` inside a fence (round-1 Gap 8) | false positive | 0 shipped occurrences | ✅ `spec.md:39` |
+| `A2` - `_fenced()` has no unterminated-fence rule (round-1 Gap 6) | latent | 0 shipped odd fence counts | ✅ `spec.md:38` |
+| `N2` - `fenced_commands()` concatenates abutting fences (round-1 Gap 7) | latent | 0 shipped adjacent fence pairs | ❌ **not recorded** - the only round-1 latent with no Out-of-Scope row |
+| `N4` - a negation outside the vocabulary still passes | residual risk | inherent to substring parity | ✅ `spec.md:50` and `:496-499` |
+| AC 2/3 failure messages name the scope, not the document path | message precision | carried 3 rounds; `where` still identifies the passage | not recorded |
+
+---
+
+### Code Quality
+
+| Principle | Status |
+| --------- | ------ |
+| Minimum code | ✅ one extracted helper (`fence_intro`), no new machinery |
+| Surgical changes | ✅ one source file touched; no shipped document changed |
+| No scope creep | ✅ prose scans left alone per `spec.md:33` |
+| Matches patterns | ✅ module-level helpers + docstring-as-rationale |
+| Spec-anchored outcome check | ✅ AC 6's asserting test now exercises the guard |
+| Per-layer Coverage Expectation | ⚠️ 3 unpinned branches remain (`M21`, `M22`, `M23`) |
+| Every test maps to a spec requirement | ✅ the orphaned test was repaired and re-anchored to AC 6's vocabulary rationale |
+| No unfalsifiable assertions | ✅ 0 of 34 added tests; hunted systematically, not by reading |
+| Documented guidelines followed | ✅ none exist - strong defaults applied (`tasks.md:19`) |
+
+---
+
+### Requirement Traceability Update
+
+| Requirement | Round-1 | Round-2 | Round-3 |
+| ----------- | ------- | ------- | ------- |
+| INTENT-01 (P1 AC 1, 2 - HTML comments) | ✅ Verified | ✅ Verified | ✅ **Verified** - all four guards now proven at guard level (`P2`, `P2b`, `P2c`, `P2d`) |
+| INTENT-02 (P1 AC 3, 7 - fence required / inline exempt) | ❌ Needs Fix | ✅ Verified | ✅ **Verified** - AC 7 fully pinned (`F10`, `F11`); AC 3 correct with the `M23` coverage note |
+| INTENT-03 (P1 AC 4, 5, 6 - negation vocabulary) | ❌ Needs Fix | ❌ Needs Fix | ✅ **Verified** - Gap B closed (`V1`, `M2` fail the net), Gap A closed (`G1`, `G4` kill the test), Gap F closed (`M13`) |
+| INTENT-04 (P2 AC 1, 2, 3 - fence-aware section) | ✅ Verified | ✅ Verified | ✅ **Verified** - AC 2 now pinned directly (`F12`, `F13`) |
+
+---
+
+### Summary
+
+**Overall**: ✅ PASS.
+
+**Spec-anchored check**: 7/10 ✅ PASS, 3 ⚠️ precision, 0 ❌ GAP
+**Sensor**: 68 mutations - 55 killed, 3 correct survivors, 6 equivalent/circular, **4 genuine survivors**, 1 false positive
+**Gate**: 612 passed, exit 0, stable across two purged runs
+**Unfalsifiable tests**: 0 of 34 added
+
+**Merge recommendation**: **merge.** Both Major gaps are closed and each was
+verified by reversing round 2's own demonstration, not by re-reading the diff -
+`V1` now fails the AC-6 net by name, and `G1`/`G4` now fail the Gap-A test that
+previously could not fail for any document, window width or vocabulary. The
+feature's Success Criteria all hold: P1, P1b and P2 kill their guard at guard
+level, P7 does not fire, the gate is green on unchanged shipped documents, and
+the vocabulary is measured against the corpus by a test that actually runs the
+scan.
+
+**Nothing remaining blocks the merge.** The four genuine survivors are unpinned
+branches with correct behaviour underneath (`M21`, `M22`, `M23`) or a property of
+the corpus rather than of the check (`M2d`). The four latents (`N2`, `N3`, `A2`,
+`N4`) are all at 0 shipped occurrences and three of the four are recorded in
+`spec.md` Out of Scope.
+
+**Optional follow-ups, none blocking** (in the order they are worth doing):
+
+1. Gap C - one `assertRaises(AssertionError)` around `assert_instructs` on a
+   prose-only scope kills `M23`.
+2. Gap D - one affirmative row whose cell mentions a negation *after* the
+   command kills `M21` and `D1`.
+3. Add an Out-of-Scope row for round-1 Gap 7 (`fenced_commands()` concatenates
+   abutting fences), the only latent still undocumented.
+4. Gap G - cosmetic; `M22` needs a fixture with a fence inside an inline scope.
+
+---
+
+# Appendix: Round-2 Report (2026-08-11, `a82c10e..3821649`) - superseded
+
+Preserved for history. Reproduced from `3821649` with mechanical edits only:
+headings demoted one level, and the labels `## Validation:` / `**Result**:` /
+`| Result |` renamed so `validate_state.py`'s verdict scraper reads the round-3
+verdict above and not this superseded one. No finding text was altered.
+
+### Round-2 verdict: FAIL
 
 **Round 2, narrow.** Every behavioural gap round 1 raised is genuinely closed,
 verified at *guard* level and not merely at suite level: probes P1, P1b, P2 kill
@@ -40,7 +417,7 @@ no `git stash` used.
 
 ---
 
-## Round 1 Gap Disposition
+### Round 1 Gap Disposition
 
 | Gap | Round-1 finding | Round-2 status | Evidence |
 | --- | --------------- | -------------- | -------- |
@@ -55,13 +432,13 @@ no `git stash` used.
 
 ---
 
-## Spec-Anchored Acceptance Criteria
+### Spec-Anchored Acceptance Criteria
 
 All `file:line` refer to `scripts/test_unit_docs_parity.py` at `3821649` unless stated.
 
-### P1: A guard rejects a document that does not instruct
+#### P1: A guard rejects a document that does not instruct
 
-| Criterion | Spec-defined outcome | `file:line` + assertion | Result |
+| Criterion | Spec-defined outcome | `file:line` + assertion | Outcome |
 | --------- | -------------------- | ----------------------- | ------ |
 | AC 1 - ignore every `<!-- ... -->` span, incl. multi-line | every span removed | impl `:302` `re.sub(r"<!--.*?(?:-->\|\Z)", "", text, flags=re.DOTALL)`; `:774` `assertEqual(visible("keep <!-- drop --> keep"), "keep  keep")`; `:777` `assertEqual(visible("a\n<!-- one\ntwo\nthree -->\nb"), "a\n\nb")`; `:794` `assertNotIn("<!--", stripped)`. Sensor `M9` (no-op) killed 5 tests, `M10` (strip-all) killed 20 incl. all four guards | ✅ PASS |
 | AC 2 - command only inside a comment ⇒ guard fails, naming the document | fail + document named | `:459` `assertNotIn("update_loop.py <feature> --root <root> --resume", collapsed(scoped))`; guard `:435-442`. Sensor `P2` → `test_the_halt_field_section_names_the_command` killed | ⚠️ Precision (carried) - fails correctly; the message names the **scope** (`"the \`halt\` field section"`, `:441`), not the document path |
@@ -71,9 +448,9 @@ All `file:line` refer to `scripts/test_unit_docs_parity.py` at `3821649` unless 
 | AC 6 - vocabulary verb-specific **and** flags no shipped fence | 0 offenders; verb-specific only | verb-specific: `:561-565` `SPELLED_OUT` written out + `:574` `assertEqual(sorted(self.SPELLED_OUT), sorted(NEGATED_IMPERATIVES))` + `:570` `assertEqual(negated_by(doc, "thing --flag"), marker, marker)` for all 15. Sensor `M3` (`IMPERATIVE_VERBS = ("run",)`) kills **both** → round-1 Gap 8 (tautology) closed. flags-none: `:672` `assertEqual(offenders, [], ...)`; independently re-derived with production semantics at `INTRO_LINES=4` → **0 offenders** | ❌ **GAP** - criterion holds today, but the test asserting it runs a different algorithm than the guard. See New Gap B |
 | AC 7 - inline guard applies criteria 1, 2, 4; does not require a fence | negation rejected on the inline mention | `:427` `read_visible(...)` (crit 1-2); `:432` `fenced=False` (no fence required); `:620` `assertEqual(negated_by(row, "update_loop.py --resume", fenced=False), "never run")`; `:626-635` `with self.assertRaises(AssertionError): assert_instructs(..., fenced=False)`; `:646-650` affirmative row accepted. Sensor `N6` → **guard killed**; `M7` (force `fenced=True`) killed `:626` | ✅ PASS - round-1 Gap 3 closed |
 
-### P2: A fenced `#` does not truncate a scope
+#### P2: A fenced `#` does not truncate a scope
 
-| Criterion | Spec-defined outcome | `file:line` + assertion | Result |
+| Criterion | Spec-defined outcome | `file:line` + assertion | Outcome |
 | --------- | -------------------- | ----------------------- | ------ |
 | AC 1 - section scan ignores lines inside fences | fenced lines skipped when locating the terminator | impl `:818-821` `fenced = _fenced(lines)` / `if number in fenced: continue`; `:740` `assertIn("more first-section text", body)`. Sensor `M11` (`fenced = set()`) killed 3 tests | ✅ PASS |
 | AC 2 - section still extends to the next real heading | reaches the next real heading, stops there | `:743-744` `assertNotIn("## second", body)` / `assertNotIn("other", body)`; `:748` `assertIn("# not a heading", section(...))`. Sensors `M11`, `M15` killed | ✅ PASS |
@@ -83,7 +460,7 @@ All `file:line` refer to `scripts/test_unit_docs_parity.py` at `3821649` unless 
 
 ---
 
-## Edge Cases
+### Edge Cases
 
 - [x] **Unterminated `<!--` hides the remainder** - `:302` `(?:-->|\Z)`; `:782` `assertEqual(visible("shown\n<!-- swallowed\nalso swallowed"), "shown\n")`. `M9`/`M10` killed.
 - [x] **Command in a comment *and* in a live fenced block ⇒ pass** - `:468` `assertIn("update_loop.py <feature> --root <root> --resume", collapsed(scoped))`. `M10`, `M16` killed.
@@ -96,7 +473,7 @@ All `file:line` refer to `scripts/test_unit_docs_parity.py` at `3821649` unless 
 
 ---
 
-## Discrimination Sensor
+### Discrimination Sensor
 
 **Isolation**: two detached `git worktree add --detach` trees at `3821649`, both
 removed with `git worktree remove --force`. `git worktree list` shows only the
@@ -118,18 +495,18 @@ mandatory. The author's round-1 observation is confirmed.
 alone; no other module imports it (verified). Document mutations are scored at
 **guard level** - the named guard failing, not merely the suite going red.
 
-### Original probes
+#### Original probes
 
-| # | Mutation | Expect | Result | Guard failed? |
+| # | Mutation | Expect | Outcome | Guard failed? |
 | - | -------- | ------ | ------ | ------------- |
 | P1 | Phase H intro → `"Never run this, it is not a supported operation:"` | kill | ✅ Killed | **YES** - `test_the_halt_phase_names_the_command` |
 | P1b | Phase H intro → `"A human deletes \`loop.json\` and starts over. Whatever you do, never run:"` | kill | ✅ Killed | **YES** - `test_the_halt_phase_names_the_command` |
 | P2 | `` ## `halt` `` block wrapped in an HTML comment | kill | ✅ Killed | **YES** - `test_the_halt_field_section_names_the_command` |
 | P7 | column-0 `# resolve the cause first` inside the Phase H fence | **survive** | ✅ Survived | n/a - correct, no false positive |
 
-### Document attacks on the new helpers
+#### Document attacks on the new helpers
 
-| # | Mutation | Expect | Result | Guard failed? |
+| # | Mutation | Expect | Outcome | Guard failed? |
 | - | -------- | ------ | ------ | ------------- |
 | N1 | Phase H fence `` ``` `` → `~~~` (valid CommonMark) | kill | ✅ Killed | YES - false-positive direction; repo uses `` ``` `` exclusively |
 | N2 | command split across two abutting fences | kill | ❌ **Survived** | NO - **Gap 7** still latent (0 shipped adjacent fence pairs) |
@@ -145,9 +522,9 @@ alone; no other module imports it (verified). Document mutations are scored at
 | A2 | Phase H fence opened, closing `` ``` `` deleted | kill | ⚠️ Guard green | NO - **Gap 6** still latent (0 shipped odd fence counts) |
 | V1 | `"commit"` added to `IMPERATIVE_VERBS` + `SPELLED_OUT` (a realistic vocabulary growth) | AC-6 net fires | ❌ **Net silent** | Suite red via `test_the_call_sits_in_the_phase_that_runs_the_gate` (coincidence - the fence is inside a guarded scope). The AC-6 net stayed green while production flagged `SKILL.md:250 ('do not commit')`. New Gap B |
 
-### Helper and constant mutations
+#### Helper and constant mutations
 
-| # | Mutation | Result | Killed by |
+| # | Mutation | Outcome | Killed by |
 | - | -------- | ------ | --------- |
 | M1 | `INTRO_LINES` 4 → 3 | ✅ Killed | `test_a_negation_wrapped_over_several_lines_is_still_read` |
 | M2 | `INTRO_LINES` 4 → **10** | ❌ **Survived** | — **New Gap E** |
@@ -174,9 +551,9 @@ alone; no other module imports it (verified). Document mutations are scored at
 | M24 | *diagnostic*: `INTRO_LINES`=10 **and** the AC-6 test re-coupled to production semantics | ✅ Killed | `test_the_vocabulary_flags_no_fence_in_any_shipped_document` - proves the decoupling is what let `M2` live |
 | M25 | *diagnostic*: AC-6 test re-coupled to production semantics alone | Survives (correct) | — the fix for New Gap B is green today, no document change needed |
 
-### Pre-existing guards (regression)
+#### Pre-existing guards (regression)
 
-| # | Mutation | Result | Killed by |
+| # | Mutation | Outcome | Killed by |
 | - | -------- | ------ | --------- |
 | R1 | drop `blast_radius` from the SKILL.md halt-reason list | ✅ Killed | `test_skill_md_enumerates_exactly_the_implemented_reasons` |
 | R2 | reintroduce `"disposable"` in `state-schema.md` | ✅ Killed | `test_no_shipped_document_repeats_a_retracted_claim` |
@@ -187,7 +564,7 @@ alone; no other module imports it (verified). Document mutations are scored at
 **No pre-existing parity check was weakened: 5/5 regression mutants killed** (round 1: 8/8).
 
 **Sensor depth**: P0-full, **46 mutations**
-**Result**: 35 as expected; **6 survived when they should have been killed**
+**Outcome**: 35 as expected; **6 survived when they should have been killed**
 (`N2`, `M2`, `M13`, `M21`, `M22`, `M23`); **2 false positives** (`N3`, `N9`);
 **2 guard-green latents** (`N4` recorded residual risk, `A2` Gap 6); **1 silent
 safety net** (`V1`) - **FAIL (narrow)**
@@ -198,7 +575,7 @@ an untested branch or an unpinned constant, not a wrong answer.
 
 ---
 
-## Gate Check
+### Gate Check
 
 - **Gate command**: `rm -rf scripts/__pycache__ && python3 -m compileall -q scripts/ && bash -n scripts/loop.sh && python3 -m unittest discover -s scripts -p 'test_*.py'`
 - **Run 1**: **611 passed, 0 failed, 0 skipped** (141.5s)
@@ -209,7 +586,7 @@ an untested branch or an unpinned constant, not a wrong answer.
 
 ---
 
-## Weakening Analysis (`a82c10e` → `3821649`)
+### Weakening Analysis (`a82c10e` → `3821649`)
 
 Nothing is strictly weaker. Every change is neutral or strengthening:
 
@@ -240,9 +617,9 @@ least one mutation (`M3`, `M1`, `M4`, `M5`, `M7`, `M8`, `M19`).
 
 ---
 
-## New Gaps (round 2), ranked
+### New Gaps (round 2), ranked
 
-### New Gap A (Major) - an unfalsifiable test still carries the retracted claim
+#### New Gap A (Major) - an unfalsifiable test still carries the retracted claim
 
 - **Location**: `scripts/test_unit_docs_parity.py:535-545`.
 - **Unfalsifiable, proven**: the test passes the command **with its literal
@@ -270,7 +647,7 @@ least one mutation (`M3`, `M1`, `M4`, `M5`, `M7`, `M8`, `M19`).
   test by line number; it was the one item on that list left untouched.
 - **Priority**: Major.
 
-### New Gap B (Major) - the AC-6 safety net does not test the guard it protects
+#### New Gap B (Major) - the AC-6 safety net does not test the guard it protects
 
 - **Location**: `scripts/test_unit_docs_parity.py:659-677`.
 - **Three ways it diverges from production** (`negated_by` `:874-911`):
@@ -305,7 +682,7 @@ least one mutation (`M3`, `M1`, `M4`, `M5`, `M7`, `M8`, `M19`).
   disagree with each other.
 - **Priority**: Major.
 
-### New Gap C (Minor) - the fence requirement is not pinned through `assert_instructs`
+#### New Gap C (Minor) - the fence requirement is not pinned through `assert_instructs`
 
 - `M23` (`:376` → `haystack = collapsed(scope)`) **survives the whole suite**.
   Behaviour is correct (`A10` kills the guard), but the only tests covering the
@@ -316,7 +693,7 @@ least one mutation (`M3`, `M1`, `M4`, `M5`, `M7`, `M8`, `M19`).
   prose, wrapped in `assertRaises(AssertionError)`.
 - **Priority**: Minor.
 
-### New Gap D (Minor) - the inline "preceding text" anchor is unpinned
+#### New Gap D (Minor) - the inline "preceding text" anchor is unpinned
 
 - `M21` (`:900` `(line.split(command, 1)[0], line)` → `(line, line)`) **survives**.
   `spec.md:113` requires the negation be read from the text *before* the command
@@ -326,14 +703,14 @@ least one mutation (`M3`, `M1`, `M4`, `M5`, `M7`, `M8`, `M19`).
   the same cell must return `None`.
 - **Priority**: Minor.
 
-### New Gap E (Minor) - `INTRO_LINES` has a floor but no ceiling
+#### New Gap E (Minor) - `INTRO_LINES` has a floor but no ceiling
 
 - `M1` (4→3) is killed by `:576-589`; `M2` (4→10) **survives**. Widening the
   window is the false-positive direction, and the corpus check that should bound
   it is Gap B. Fixing Gap B fixes this: under `M24`, widening to 10 is killed.
 - **Priority**: Minor (subsumed by Gap B).
 
-### New Gap F (Minor) - `fence_spans()`' unterminated branch is unfalsifiable
+#### New Gap F (Minor) - `fence_spans()`' unterminated branch is unfalsifiable
 
 - `M13` (delete `:869-870`) **survives**. The docstring at `:857-859` asserts
   *"An unterminated fence runs to the end"* and no test holds it. Same species as
@@ -342,7 +719,7 @@ least one mutation (`M3`, `M1`, `M4`, `M5`, `M7`, `M8`, `M19`).
   but the untested claim is a one-line test away.
 - **Priority**: Minor.
 
-### New Gap G (Cosmetic) - the inline branch's fence exclusion is unpinned
+#### New Gap G (Cosmetic) - the inline branch's fence exclusion is unpinned
 
 - `M22` (drop `number not in inside` at `:902`) **survives**. A fenced occurrence
   would count as an inline mention. No shipped inline guard has a fence in scope.
@@ -350,7 +727,7 @@ least one mutation (`M3`, `M1`, `M4`, `M5`, `M7`, `M8`, `M19`).
 
 ---
 
-## Code Quality
+### Code Quality
 
 | Principle | Status |
 | --------- | ------ |
@@ -366,7 +743,7 @@ least one mutation (`M3`, `M1`, `M4`, `M5`, `M7`, `M8`, `M19`).
 
 ---
 
-## Requirement Traceability Update
+### Requirement Traceability Update
 
 | Requirement | Round-1 Status | Round-2 Status |
 | ----------- | -------------- | -------------- |
@@ -377,7 +754,7 @@ least one mutation (`M3`, `M1`, `M4`, `M5`, `M7`, `M8`, `M19`).
 
 ---
 
-## Summary
+### Summary
 
 **Overall**: ⚠️ Issues - the behavioural work is done; two test-integrity items remain.
 

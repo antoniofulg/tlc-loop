@@ -37,6 +37,7 @@ thing the feature exists to prevent, and the suite reports PASS.
 | Changing any shipped document | No prose is wrong today. This is guard precision only. |
 | An unterminated-fence rule in `_fenced()` | `fence_spans()` treats an unclosed fence as running to the end and a test pins that. `_fenced()` is left alone: it serves the `no_diff_tasks` scan, 0 shipped documents have an odd fence count, and changing it would touch a check this feature has no quarrel with. **Recorded, not fixed.** |
 | `visible()` stripping `<!--` inside a code fence | A fenced example containing `<!--` would be partly erased before scanning, turning a valid document red - the same false-positive class as P7. 0 shipped fences contain it, and making `visible()` fence-aware means splitting lines before comments are removed, which inverts the order the other helpers assume. **Recorded, not fixed.** |
+| `fenced_commands()` concatenating abutting fences | Two blocks separated by nothing are joined, so a command split across them would read as one. 0 shipped documents have abutting fences, and the join is what lets a wrapped call match at all. **Recorded, not fixed.** |
 | An upper bound on `INTRO_LINES` | The lower bound is pinned - a wrapped introducing sentence must still be read - and widening past 4 is caught by the corpus safety net rather than by a boundary test. |
 
 ---
@@ -121,10 +122,10 @@ block and confirm the Phase H guard still passes and still stops at `### Step 3`
 
 | Requirement ID | Story | Covers | Phase | Status |
 | -------------- | ----- | ------ | ----- | ------ |
-| INTENT-01 | P1: A guard rejects a document that does not instruct | P1 AC 1, 2 - HTML comments are invisible to every command guard | T1 | Implementing |
-| INTENT-02 | P1: A guard rejects a document that does not instruct | P1 AC 3, 7 - a fenced-artifact guard requires a fence; an inline guard does not | T3 | Implementing |
-| INTENT-03 | P1: A guard rejects a document that does not instruct | P1 AC 4, 5, 6 - the negated-imperative vocabulary and the clause it reads | T4 | Implementing |
-| INTENT-04 | P2: A fenced `#` does not truncate a scope | P2 AC 1, 2, 3 - the section scan skips fenced lines | T2 | Implementing |
+| INTENT-01 | P1: A guard rejects a document that does not instruct | P1 AC 1, 2 - HTML comments are invisible to every command guard | T1 | Verified |
+| INTENT-02 | P1: A guard rejects a document that does not instruct | P1 AC 3, 7 - a fenced-artifact guard requires a fence; an inline guard does not | T3 | Verified |
+| INTENT-03 | P1: A guard rejects a document that does not instruct | P1 AC 4, 5, 6 - the negated-imperative vocabulary and the clause it reads | T4 | Verified |
+| INTENT-04 | P2: A fenced `#` does not truncate a scope | P2 AC 1, 2, 3 - the section scan skips fenced lines | T2 | Verified |
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 

@@ -652,6 +652,19 @@ class ANegatedCommandIsNotAnInstruction(unittest.TestCase):
         doc = "## s\n\ntext\n\nNever run this:\n```bash\nthing --flag\n"
         self.assertEqual(negated_by(doc, "thing --flag"), "never run")
 
+    def test_a_negation_after_an_inline_mention_does_not_flag(self):
+        # The anchor reads the text *before* the command. A row that gives the
+        # command and then qualifies it is an instruction, not a warning.
+        row = "| `H` | A human runs `update_loop.py --resume`; never run it twice. |"
+        self.assertIsNone(negated_by(row, "update_loop.py --resume", fenced=False))
+
+    def test_the_guard_itself_rejects_a_prose_only_command(self):
+        # Pins the fence requirement inside assert_instructs rather than only
+        # in fenced_commands, so dropping it there fails here.
+        doc = "## s\n\nrun `thing --flag` sometime\n\n```bash\nother --thing\n```\n"
+        with self.assertRaises(AssertionError):
+            assert_instructs(self, doc, "thing --flag", "the fake section")
+
     def test_the_guard_itself_rejects_a_negated_fence(self):
         # The fenced mirror of the row case above. Forcing `fenced` False here
         # makes the scan read the affirmative prose mention instead of the
