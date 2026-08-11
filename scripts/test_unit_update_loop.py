@@ -592,6 +592,102 @@ class ResumeLiftsARecordedHalt(unittest.TestCase):
             self.assertEqual(_read(root)["status"], "blocked")
 
 
+class ResumeIsRecordedAndPreservesTheRun(unittest.TestCase):
+    """RESUME-02: the transition is auditable and costs nothing else.
+
+    Derived from spec P1 AC 3, 4. A state transition that leaves no trace is
+    unauditable, and one that moves a counter would let resuming a run walk it
+    into a different halt than the one it was resumed from.
+    """
+
+    def test_exactly_one_entry_is_appended(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            _run(root, "--resume")
+            self.assertEqual(len(_read(root)["iterations"]), 1)
+
+    def test_the_entry_is_recorded_against_the_halt_phase(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            _run(root, "--resume")
+            self.assertEqual(_read(root)["iterations"][-1]["phase"], "H")
+
+    def test_the_action_names_the_transition(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            _run(root, "--resume")
+            self.assertTrue(_read(root)["iterations"][-1]["action"].startswith("resume"))
+
+    def test_the_action_carries_the_detail_when_one_is_given(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            _run(root, "--resume", "--detail", "human approved another cycle")
+            self.assertIn("human approved another cycle",
+                          _read(root)["iterations"][-1]["action"])
+
+    def test_the_action_is_bare_when_no_detail_is_given(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            _run(root, "--resume")
+            self.assertEqual(_read(root)["iterations"][-1]["action"], "resume")
+
+    def test_the_counters_the_halt_conditions_read_are_untouched(self):
+        with tempfile.TemporaryDirectory() as root:
+            counters = {"gate_attempts": {"T1": 4}, "iterations_without_commit": 7,
+                        "started_at_ms": 1700000000000}
+            _seed(root, counters=dict(counters), **HALTED)
+            _run(root, "--resume")
+            self.assertEqual(_read(root)["counters"], counters)
+
+    def test_the_iteration_number_does_not_advance(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, iteration=9, **HALTED)
+            _run(root, "--resume")
+            self.assertEqual(_read(root)["iteration"], 9)
+
+    def test_the_objective_verify_and_reconciled_survive(self):
+        with tempfile.TemporaryDirectory() as root:
+            verify = {"rounds": 3, "epoch_rounds": 2, "last_verdict": "FAIL",
+                      "last_report": "validation.md", "gaps_open": 2,
+                      "verified_at": "abc1234"}
+            reconciled = [{"task": "T4", "winner": "git", "at": "2026-01-01T00:00:00Z"}]
+            _seed(root, verify=dict(verify), reconciled=list(reconciled),
+                  current_batch=["T5", "T6"], current_task="T5", **HALTED)
+            _run(root, "--resume")
+            after = _read(root)
+            self.assertEqual(after["objective"], OBJECTIVE)
+            self.assertEqual(after["verify"], verify)
+            self.assertEqual(after["reconciled"], reconciled)
+            self.assertEqual(after["current_batch"], ["T5", "T6"])
+            self.assertEqual(after["current_task"], "T5")
+
+    def test_the_log_stays_capped_at_the_limit(self):
+        with tempfile.TemporaryDirectory() as root:
+            full = [{"n": n, "at": "2026-01-01T00:00:00Z", "phase": "B",
+                     "action": "batch", "task": None, "commit": None}
+                    for n in range(50)]
+            _seed(root, iterations=full, **HALTED)
+            _run(root, "--resume")
+            entries = _read(root)["iterations"]
+            self.assertEqual(len(entries), 50)
+            self.assertEqual(entries[-1]["phase"], "H")
+            self.assertEqual(entries[0]["n"], 1)
+
+    def test_a_resume_that_also_closes_an_iteration_records_both(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            _run(root, "--resume", "--iteration-done", "--phase", "B", "--action", "carried on")
+            after = _read(root)
+            self.assertEqual(len(after["iterations"]), 2)
+            self.assertEqual(after["iteration"], 1)
+
+    def test_a_second_consecutive_resume_is_refused(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            _run(root, "--resume")
+            self.assertEqual(_run(root, "--resume").returncode, 2)
+
+
 class ResumeRefusals(unittest.TestCase):
     """RESUME-03: each refusal exits 2 and writes nothing.
 

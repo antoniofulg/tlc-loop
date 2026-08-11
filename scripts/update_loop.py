@@ -157,6 +157,28 @@ def _not_resumable(state):
     return None
 
 
+def _log(state, **fields):
+    """Append one entry to the capped, append-only iteration log.
+
+    `n` is whatever `iteration` holds when the entry is written, so a caller
+    that advances the counter does so before logging and one that does not -
+    a resume - records the iteration it happened during.
+    """
+    entry = {
+        "n": state["iteration"],
+        "at": _state_io.now_iso(),
+        "phase": None,
+        "action": None,
+        "task": None,
+        "commit": None,
+    }
+    entry.update(fields)
+    state["iterations"].append(entry)
+    # Append-only, then trim the front: history is never rewritten, only
+    # forgotten.
+    del state["iterations"][:-LOG_LIMIT]
+
+
 def apply(state, args):
     """Apply the requested mutations to `state` in place."""
     if args.batch is not None:
@@ -222,6 +244,10 @@ def apply(state, args):
         # condition that still holds halts the run again on the next detect.
         state["halt"] = {"reason": None, "detail": None}
         state["status"] = "active"
+        # Logged against `H` because that is the phase being left. A lifted
+        # halt that left no trace would be the one state transition the
+        # append-only log cannot account for.
+        _log(state, phase="H", action=f"resume: {args.detail}" if args.detail else "resume")
     # An explicit status is applied last so it wins over the halt default,
     # which is how a proven external blocker becomes `blocked` rather than
     # `halted`.
@@ -238,19 +264,13 @@ def apply(state, args):
             counters["iterations_without_commit"] = (
                 int(counters.get("iterations_without_commit", 0)) + 1
             )
-        state["iterations"].append(
-            {
-                "n": state["iteration"],
-                "at": _state_io.now_iso(),
-                "phase": args.phase,
-                "action": args.action,
-                "task": args.task_done or args.task_started,
-                "commit": args.commit,
-            }
+        _log(
+            state,
+            phase=args.phase,
+            action=args.action,
+            task=args.task_done or args.task_started,
+            commit=args.commit,
         )
-        # Append-only, then trim the front: history is never rewritten, only
-        # forgotten.
-        del state["iterations"][:-LOG_LIMIT]
 
     state["last_updated"] = _state_io.now_iso()
     return state

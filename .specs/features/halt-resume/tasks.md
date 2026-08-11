@@ -106,7 +106,7 @@ T6 → T7 → T8
 
 ---
 
-### T2: Record the resume in the append-only iteration log
+### T2: Record the resume in the append-only iteration log ✅
 
 **What**: Extract the append-and-trim of `iterations` so `--resume` appends exactly one audit entry without incrementing `iteration` or `iterations_without_commit`.
 **Where**: `scripts/update_loop.py`
@@ -379,8 +379,8 @@ No task carries `Tests: none`. T6 and T7 add no new parity test of their own: bo
 
 | Requirement ID | Tasks | Status |
 | --- | --- | --- |
-| RESUME-01 | T1 | Implementing (T1 done, log entry pending in T2) |
-| RESUME-02 | T2 | Pending |
+| RESUME-01 | T1 | Verified in T1 |
+| RESUME-02 | T2 | Verified in T2 |
 | RESUME-03 | T1 | Verified in T1 |
 | RESUME-04 | T3 | Pending |
 | RESUME-05 | T4, T5 | Pending |
