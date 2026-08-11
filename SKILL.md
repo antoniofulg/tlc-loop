@@ -385,8 +385,17 @@ it drifted once already.
 1. Print the iteration summary with the halt reason filled in.
 2. **Do not print the done-signature.** It means verified; a halted run is not.
 3. Stop. A halt does not clear itself: re-invoking without changing the cause
-   prints the same line. A human resolves the cause, or the config that tripped
-   a limit changes.
+   prints the same line. A human resolves the cause, or changes the config that
+   tripped a limit, and then lifts the halt:
+   ```bash
+   python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> \
+     --resume --detail "<why the run may continue>"
+   ```
+   **This is never your step.** It is the human's, and it is the reason `H` is
+   a stop rather than a question. `--resume` clears the halt and nothing else:
+   counters stay where they are, so a condition that still holds halts the run
+   again on the very next detect. It buys a fresh look at the cause, not a
+   fresh budget.
 
 A proven external blocker is the one halt that also sets `--status blocked`.
 All three criteria in [recovery-loop.md](references/recovery-loop.md) must

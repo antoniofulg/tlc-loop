@@ -253,7 +253,7 @@ T6 → T7 → T8
 
 ---
 
-### T7: Name `--resume` in the halt phase
+### T7: Name `--resume` in the halt phase ✅
 
 **What**: Amend the Phase H branch so the "a halt does not clear itself" rule names the command a human runs after resolving the cause.
 **Where**: `SKILL.md`
