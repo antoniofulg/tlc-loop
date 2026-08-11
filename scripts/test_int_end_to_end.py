@@ -18,6 +18,7 @@ provider CLI and nothing touches the network: the subprocesses are `git`, this
 interpreter, and `bash` running `loop.sh`.
 """
 
+import json
 import os
 import shutil
 import subprocess
@@ -453,6 +454,85 @@ class EndToEnd(unittest.TestCase):
         self.assertEqual(proc.returncode, 1, proc.stderr)
         self.assertIn("reason=no_progress", proc.stdout.splitlines()[-1])
         self.assert_no_executor_ran()
+
+    # ---- 4b. a halt is lifted, and re-fires if its cause still holds ------
+
+    def resume(self, *args):
+        proc = self.run_script("update_loop.py", "toy", "--root", self.root, "--resume", *args)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return proc
+
+    def test_a_resume_returns_the_run_to_the_phase_its_state_implies(self):
+        # RESUME-04 / spec P1 AC 10. The whole point: the run continues where
+        # it was instead of being reconstructed from a deleted state file.
+        self.bootstrap()
+        before = self.detect()
+        self.run_script(
+            "update_loop.py", "toy", "--root", self.root,
+            "--halt", "gate_stuck", "--detail", "T1 exceeded its gate budget",
+        )
+        self.assertTrue(self.detect().startswith("phase=H "))
+        self.resume("--detail", "human approved another diagnosis cycle")
+        self.assertEqual(self.detect(), before)
+
+    def test_the_run_survives_the_halt_and_the_resume_intact(self):
+        # The bill deleting loop.json would have charged: objective, counters,
+        # clock, iteration history.
+        self.bootstrap()
+        self.run_script(
+            "update_loop.py", "toy", "--root", self.root,
+            "--iteration-done", "--phase", "B", "--action", "batch 1", "--commit", "abc1234",
+        )
+        with open(self.state_path(), encoding="utf-8") as fh:
+            before = json.load(fh)
+        self.run_script("update_loop.py", "toy", "--root", self.root, "--halt", "gate_stuck")
+        self.resume()
+        with open(self.state_path(), encoding="utf-8") as fh:
+            after = json.load(fh)
+        self.assertEqual(after["objective"], before["objective"])
+        self.assertEqual(after["counters"], before["counters"])
+        self.assertEqual(after["iteration"], before["iteration"])
+        self.assertEqual(after["iterations"][0], before["iterations"][0])
+        self.assertEqual(after["status"], "active")
+
+    def test_a_resume_does_not_buy_past_the_gate_attempt_limit(self):
+        # RESUME-04 / spec P1 AC 9. Resuming is not a way to spend more
+        # attempts than the config allows: the derived condition is re-read.
+        self.bootstrap()
+        self.write_config("[limits]\ngate_attempts_per_task = 2\n")
+        for _ in range(3):
+            self.run_script("update_loop.py", "toy", "--root", self.root, "--gate-attempt", "T1")
+        self.assertTrue(self.detect().startswith("phase=H action=halt reason=gate_stuck "))
+        self.run_script("update_loop.py", "toy", "--root", self.root, "--halt", "gate_stuck")
+        self.resume()
+        line = self.detect()
+        self.assertTrue(line.startswith("phase=H action=halt reason=gate_stuck "), line)
+        self.assertIn("T1", line)
+
+    def test_a_resume_does_not_buy_past_the_no_progress_limit(self):
+        self.bootstrap()
+        self.write_config("[limits]\nno_progress_iterations = 1\n")
+        self.run_script(
+            "update_loop.py", "toy", "--root", self.root,
+            "--iteration-done", "--phase", "B", "--action", "batch 1",
+        )
+        self.run_script("update_loop.py", "toy", "--root", self.root, "--halt", "no_progress")
+        self.resume()
+        line = self.detect()
+        self.assertTrue(line.startswith("phase=H action=halt reason=no_progress "), line)
+
+    def test_raising_the_limit_is_what_makes_the_resume_stick(self):
+        # The documented exit: resolve the cause, or change the config that
+        # tripped the limit. Proves the re-halt above is the limit talking and
+        # not the resume failing to clear anything.
+        self.bootstrap()
+        self.write_config("[limits]\ngate_attempts_per_task = 2\n")
+        for _ in range(3):
+            self.run_script("update_loop.py", "toy", "--root", self.root, "--gate-attempt", "T1")
+        self.run_script("update_loop.py", "toy", "--root", self.root, "--halt", "gate_stuck")
+        self.resume()
+        self.write_config("[limits]\ngate_attempts_per_task = 5\n")
+        self.assertFalse(self.detect().startswith("phase=H"))
 
     # ---- 5. the terminal path --------------------------------------------
 

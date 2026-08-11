@@ -152,7 +152,7 @@ confirm the parity suite flags a planted reintroduction.
 | RESUME-01 | P1: Lift a recorded halt | P1 AC 1, 2, 8 - the transition itself and its flag registration | T1 | Implementing |
 | RESUME-02 | P1: Lift a recorded halt | P1 AC 3, 4 - preservation of state and the audit entry | T2 | Implementing |
 | RESUME-03 | P1: Lift a recorded halt | P1 AC 5, 6, 7 - the three refusals, each leaving the file untouched | T1 | Implementing |
-| RESUME-04 | P1: Lift a recorded halt | P1 AC 9, 10 - derived conditions re-evaluated after a resume | Tasks | Pending |
+| RESUME-04 | P1: Lift a recorded halt | P1 AC 9, 10 - derived conditions re-evaluated after a resume | T3 | Implementing |
 | RESUME-05 | P2: Give `gate_attempts` a documented writer | P2 AC 1-4 - the documented writer and its parity guard | Tasks | Pending |
 | RESUME-06 | P3: Document the resume transition | P3 AC 1-4 - the prose agreeing with the behavior | Tasks | Pending |
 

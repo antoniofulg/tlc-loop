@@ -138,7 +138,7 @@ T6 → T7 → T8
 
 ---
 
-### T3: Cover halt, resume, and the re-derived halt end to end
+### T3: Cover halt, resume, and the re-derived halt end to end ✅
 
 **What**: Add an integration test that walks halt → resume → detect over a real tmpdir git repo, proving a still-true derived condition re-halts and a resolved one does not.
 **Where**: `scripts/test_int_end_to_end.py`
@@ -382,7 +382,7 @@ No task carries `Tests: none`. T6 and T7 add no new parity test of their own: bo
 | RESUME-01 | T1 | Verified in T1 |
 | RESUME-02 | T2 | Verified in T2 |
 | RESUME-03 | T1 | Verified in T1 |
-| RESUME-04 | T3 | Pending |
+| RESUME-04 | T3 | Verified in T3 |
 | RESUME-05 | T4, T5 | Pending |
 | RESUME-06 | T6, T7, T8 | Pending |
 
