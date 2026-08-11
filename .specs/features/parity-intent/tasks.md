@@ -96,7 +96,7 @@ T3 → T4
 
 ---
 
-### T2: Make the section scan fence-aware
+### T2: Make the section scan fence-aware ✅
 
 **What**: Have `section()` skip lines inside fenced blocks when looking for the heading that ends a section.
 **Where**: `scripts/test_unit_docs_parity.py`
@@ -250,6 +250,6 @@ No task carries `Tests: none`. Each helper's discrimination test - the planted m
 | INTENT-01 | T1 | Verified in T1 |
 | INTENT-02 | T3 | Pending |
 | INTENT-03 | T4 | Pending |
-| INTENT-04 | T2 | Pending |
+| INTENT-04 | T2 | Verified in T2 |
 
 **Coverage:** 4 total, 4 mapped to tasks, 0 unmapped.

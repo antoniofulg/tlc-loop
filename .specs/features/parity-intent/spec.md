@@ -115,10 +115,10 @@ block and confirm the Phase H guard still passes and still stops at `### Step 3`
 
 | Requirement ID | Story | Covers | Phase | Status |
 | -------------- | ----- | ------ | ----- | ------ |
-| INTENT-01 | P1: A guard rejects a document that does not instruct | P1 AC 1, 2 - HTML comments are invisible to every command guard | Tasks | Pending |
+| INTENT-01 | P1: A guard rejects a document that does not instruct | P1 AC 1, 2 - HTML comments are invisible to every command guard | T1 | Implementing |
 | INTENT-02 | P1: A guard rejects a document that does not instruct | P1 AC 3, 7 - a fenced-artifact guard requires a fence; an inline guard does not | Tasks | Pending |
 | INTENT-03 | P1: A guard rejects a document that does not instruct | P1 AC 4, 5, 6 - the negated-imperative vocabulary and the clause it reads | Tasks | Pending |
-| INTENT-04 | P2: A fenced `#` does not truncate a scope | P2 AC 1, 2, 3 - the section scan skips fenced lines | Tasks | Pending |
+| INTENT-04 | P2: A fenced `#` does not truncate a scope | P2 AC 1, 2, 3 - the section scan skips fenced lines | T2 | Implementing |
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 

@@ -470,6 +470,48 @@ class ClearingAHaltHasOneSupportedRoute(unittest.TestCase):
             table_row(decoyed, "| `H` |", "references/phase-transitions.md")
 
 
+class AFencedHashIsCodeNotStructure(unittest.TestCase):
+    """INTENT-04: a `#` inside a code block does not end a section.
+
+    The opposite failure to the rest of this file, and the cheaper one to hit:
+    a contributor adding a shell comment to a bash example would shrink the
+    scope of a guard that has nothing to do with their edit. Probe P7 from the
+    halt-resume verifier killed exactly that harmless change.
+    """
+
+    DOC = (
+        "## first\n\ntext\n\n```bash\n# not a heading\nrun --thing\n```\n\n"
+        "more first-section text\n\n## second\n\nother\n"
+    )
+
+    def test_a_fenced_hash_does_not_end_the_section(self):
+        body = section(self.DOC, "## first", "fake.md")
+        self.assertIn("more first-section text", body)
+
+    def test_the_section_still_ends_at_the_real_heading(self):
+        body = section(self.DOC, "## first", "fake.md")
+        self.assertNotIn("## second", body)
+        self.assertNotIn("other", body)
+
+    def test_the_fenced_line_is_still_part_of_the_section(self):
+        self.assertIn("# not a heading", section(self.DOC, "## first", "fake.md"))
+
+    def test_a_shell_comment_in_phase_h_leaves_the_guard_passing(self):
+        # Probe P7 replayed against the shipped document.
+        skill = read_visible("SKILL.md")
+        edited = skill.replace(
+            "   python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> \\\n"
+            "     --resume",
+            "   # resolve the cause first\n"
+            "   python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> \\\n"
+            "     --resume",
+        )
+        self.assertNotEqual(edited, skill, "the Phase H block moved; update this probe")
+        body = section(edited, "#### Phase H - Halt", "SKILL.md")
+        self.assertIn("update_loop.py <feature> --root <root> --resume", collapsed(body))
+        self.assertNotIn("### Step 3", body)
+
+
 class HtmlCommentsAreNotDocumentation(unittest.TestCase):
     """INTENT-01: the guards read what the document shows, not what it holds."""
 
@@ -504,19 +546,30 @@ def section(text, heading, where):
     neighbouring section still satisfies a search over the whole document, so a
     whole-file check cannot tell "documented here" from "documented somewhere",
     which is the only thing these criteria actually ask.
+
+    Ends at the next heading of the same level *or shallower*. Stopping only at
+    the same level would run a last-child section to end of file, which is no
+    scope at all - the one `#### Phase H` hit before that was fixed.
+
+    Lines inside a fenced block are skipped, so a shell comment in a bash
+    example stays code. `_fenced()` is defined further down, next to the other
+    scan it serves; Python resolves the name when this is called.
     """
-    start = text.find(heading)
-    if start < 0:
+    lines = text.splitlines(keepends=True)
+    start = next((n for n, line in enumerate(lines) if line.startswith(heading)), None)
+    if start is None:
         raise AssertionError(f"{where}: the section anchored on {heading!r} is gone")
-    # Ends at the next heading of the same level *or shallower*. Stopping only
-    # at the same level would run a last-child section to end of file, which is
-    # no scope at all - the one `#### Phase H` hit before this was fixed.
     level = len(heading) - len(heading.lstrip("#"))
-    rest = text[start + len(heading):]
-    ends = [found for found in
-            (rest.find("\n" + "#" * depth + " ") for depth in range(1, level + 1))
-            if found >= 0]
-    return heading + rest[:min(ends)] if ends else heading + rest
+    fenced = _fenced(lines)
+    end = len(lines)
+    for number in range(start + 1, len(lines)):
+        if number in fenced:
+            continue
+        depth = len(lines[number]) - len(lines[number].lstrip("#"))
+        if 0 < depth <= level and lines[number][depth:depth + 1] == " ":
+            end = number
+            break
+    return "".join(lines[start:end])
 
 
 def collapsed(text):
