@@ -158,6 +158,78 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: scripts/test_unit_docs_parity.py:389 (mutants P5, P6) (docs-parity)
 - last seen: 2026-08-11T14:25:09Z
 
+### L-025 - Anchor a lookbehind scan window to the matched token's own line, not to the enclosing scan window's start.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `docs-parity` · harmful: 0
+- features: parity-intent
+- evidence: P1 AC 4 / sensor A7 / scripts/test_unit_docs_parity.py:772 (docs-parity)
+- last seen: 2026-08-11T16:14:11Z
+
+### L-026 - Prove a reused check can still fire on the narrowest scope it is applied to, not only on the widest.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `docs-parity` · harmful: 0
+- features: parity-intent
+- evidence: P1 AC 7 / sensor A8 / scripts/test_unit_docs_parity.py:383 (docs-parity)
+- last seen: 2026-08-11T16:14:11Z
+
+### L-027 - Back a scan-window or scope choice with a fixture whose verdict changes when the window changes.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `docs-parity` · harmful: 0
+- features: parity-intent
+- evidence: mutant H8 / scripts/test_unit_docs_parity.py:535 (docs-parity)
+- last seen: 2026-08-11T16:14:11Z
+
+### L-028 - Never assert a property that the constant's own construction guarantees; the test cannot fail.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `testing` · harmful: 0
+- features: parity-intent
+- evidence: mutant H10 / scripts/test_unit_docs_parity.py:558 (testing)
+- last seen: 2026-08-11T16:14:11Z
+
+### L-029 - Replay a regression probe with the exact input that originally failed, not a weakened variant.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `testing` · harmful: 0
+- features: parity-intent
+- evidence: P2 AC 3 / scripts/test_unit_docs_parity.py:662 (testing)
+- last seen: 2026-08-11T16:14:11Z
+
+### L-030 - A corpus-wide safety-net test must call the production helper, not re-implement its scan; a private copy drifts the moment the helper changes.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `docs-parity` · harmful: 0
+- features: parity-intent
+- evidence: mutants M2/M24/V1 / scripts/test_unit_docs_parity.py:659 (docs-parity)
+- last seen: 2026-08-11T17:01:49Z
+
+### L-031 - When a test passes a multi-line literal to a helper that compares against collapsed text, the comparison can never match and the assertion is unfalsifiable.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `test-helpers` · harmful: 0
+- features: parity-intent
+- evidence: New Gap A / scripts/test_unit_docs_parity.py:535 (test-helpers)
+- last seen: 2026-08-11T17:01:49Z
+
+### L-032 - Correcting a false rationale in the spec is half the fix; the same sentence usually also lives in a code comment, and only the spec gets rewritten.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `docs-parity` · harmful: 0
+- features: parity-intent
+- evidence: spec.md:48 corrected while scripts/test_unit_docs_parity.py:537 kept the retracted claim (docs-parity)
+- last seen: 2026-08-11T17:01:49Z
+
+### L-033 - Delete __pycache__ before every mutation run: CPython invalidates bytecode on (mtime, size), so a same-length edit in the same second makes a live mutant look covered.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `testing` · harmful: 0
+- features: parity-intent
+- evidence: round-2 sensor methodology, reproduced with os.utime (testing)
+- last seen: 2026-08-11T17:01:49Z
+
+### L-034 - Test a guard's plumbing through the guard: asserting on the inner helper leaves the wiring in the assert_* wrapper unpinned.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `test-helpers` · harmful: 0
+- features: parity-intent
+- evidence: mutant M23 / scripts/test_unit_docs_parity.py:376 (test-helpers)
+- last seen: 2026-08-11T17:01:49Z
+
+### L-035 - Hunt unfalsifiable tests by subtraction: any test the whole mutant battery never kills is a suspect, and the added-tests list is the set to check.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `testing` · harmful: 0
+- features: parity-intent
+- evidence: round-3 sensor: 68 mutants vs scripts/test_unit_docs_parity.py:1 (testing)
+- last seen: 2026-08-11T17:24:25Z
+
+### L-036 - Give every corpus-wide negative assertion a positive control that fails when the scan reaches no input; assertEqual(offenders, []) is green on an empty corpus.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `test-helpers` · harmful: 0
+- features: parity-intent
+- evidence: mutant F16 / scripts/test_unit_docs_parity.py:600 (test-helpers)
+- last seen: 2026-08-11T17:24:25Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

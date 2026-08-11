@@ -287,6 +287,26 @@ def read_shipped(relative_path):
         return handle.read()
 
 
+def visible(text):
+    """`text` as a reader sees it: every HTML comment removed.
+
+    A commented-out instruction is not an instruction. A guard asserting that a
+    document tells someone to run a command has to read what the document
+    shows, or commenting the block out leaves the guard green over prose that
+    no longer instructs anyone.
+
+    An unterminated `<!--` hides the rest of the document, which is what a
+    renderer does with it. The guard should not be the one reader that still
+    counts the tail.
+    """
+    return re.sub(r"<!--.*?(?:-->|\Z)", "", text, flags=re.DOTALL)
+
+
+def read_visible(relative_path):
+    """One shipped document with its HTML comments removed."""
+    return visible(read_shipped(relative_path))
+
+
 class StageRoutingContractParity(unittest.TestCase):
     """Public docs preserve the handoff and runtime routing vocabulary."""
 
@@ -347,6 +367,27 @@ HAND_CLEARED_HALT = (
 )
 
 
+def assert_instructs(case, scope, command, where, fenced=True):
+    """Assert `scope` tells the reader to run `command`, and does not warn them off.
+
+    `fenced=False` is for a criterion whose artifact is an inline mention in a
+    table cell, where requiring a block would fail a correct document.
+    """
+    haystack = collapsed(fenced_commands(scope) if fenced else scope)
+    case.assertIn(
+        command,
+        haystack,
+        f"{where} does not carry {command!r}"
+        + (" as a fenced call; a mention in prose is not an instruction" if fenced else ""),
+    )
+    marker = negated_by(scope, command, fenced=fenced)
+    case.assertIsNone(
+        marker,
+        f"{where} carries {command!r} but the prose introducing it says "
+        f"{marker!r}, so it reads as a warning rather than an instruction",
+    )
+
+
 class ClearingAHaltHasOneSupportedRoute(unittest.TestCase):
     """RESUME-06: the prose points at the flag, never at an editor."""
 
@@ -382,35 +423,49 @@ class ClearingAHaltHasOneSupportedRoute(unittest.TestCase):
 
     def test_the_transition_row_names_the_command(self):
         row = table_row(
-            read_shipped("references/phase-transitions.md"),
+            read_visible("references/phase-transitions.md"),
             "| `H` |",
             "references/phase-transitions.md",
         )
-        self.assertIn(
-            "update_loop.py --resume",
-            row,
-            "the H transition row says how a halt clears without naming the "
-            "command that clears it",
+        assert_instructs(
+            self, row, "update_loop.py --resume",
+            "the H transition row", fenced=False,
         )
 
     def test_the_halt_field_section_names_the_command(self):
         body = section(
-            read_shipped("references/state-schema.md"), "## `halt`", "references/state-schema.md"
+            read_visible("references/state-schema.md"), "## `halt`", "references/state-schema.md"
         )
-        self.assertIn(
-            "update_loop.py <feature> --root <root> --resume",
-            collapsed(body),
-            "the `halt` field section does not carry the command that clears it",
+        assert_instructs(
+            self, body, "update_loop.py <feature> --root <root> --resume",
+            "the `halt` field section",
         )
 
     def test_the_halt_phase_names_the_command(self):
-        body = section(read_shipped("SKILL.md"), "#### Phase H - Halt", "SKILL.md")
-        self.assertIn(
-            "update_loop.py <feature> --root <root> --resume",
-            collapsed(body),
-            "Phase H does not carry the command a human runs to lift the halt "
-            "it just recorded; naming the flag in passing is not the same thing",
+        body = section(read_visible("SKILL.md"), "#### Phase H - Halt", "SKILL.md")
+        assert_instructs(
+            self, body, "update_loop.py <feature> --root <root> --resume",
+            "Phase H",
         )
+
+    def test_a_commented_out_block_does_not_count_as_documentation(self):
+        # Probe P2 from the halt-resume verifier: wrapping the block in an HTML
+        # comment left every guard green over prose that instructs nobody.
+        schema = read_shipped("references/state-schema.md")
+        body = section(schema, "## `halt`", "references/state-schema.md")
+        block = body[body.index("It is cleared by one command"):]
+        commented = schema.replace(block, f"<!--\n{block}\n-->")
+        scoped = section(visible(commented), "## `halt`", "references/state-schema.md")
+        self.assertNotIn("update_loop.py <feature> --root <root> --resume", collapsed(scoped))
+
+    def test_a_live_instance_survives_a_commented_out_copy(self):
+        # Commenting out a duplicate is housekeeping, not a regression.
+        schema = read_shipped("references/state-schema.md")
+        body = section(schema, "## `halt`", "references/state-schema.md")
+        block = body[body.index("It is cleared by one command"):]
+        doubled = schema.replace(block, f"<!--\n{block}\n-->\n{block}", 1)
+        scoped = section(visible(doubled), "## `halt`", "references/state-schema.md")
+        self.assertIn("update_loop.py <feature> --root <root> --resume", collapsed(scoped))
 
     def test_each_scope_excludes_the_passage_that_follows_it(self):
         # The check that makes the three above mean anything: a scan running to
@@ -431,6 +486,348 @@ class ClearingAHaltHasOneSupportedRoute(unittest.TestCase):
             table_row(decoyed, "| `H` |", "references/phase-transitions.md")
 
 
+class ANegatedCommandIsNotAnInstruction(unittest.TestCase):
+    """INTENT-03: a call the prose warns against is not a call being given.
+
+    Probes P1 and P1b from the halt-resume verifier: the fenced command left
+    exactly where it was, with the sentence above it inverted. Both left the
+    suite green while the document told the reader to do the opposite.
+
+    **The limit, stated rather than discovered later.** This matches a fixed
+    list of negated imperatives. A negation phrased outside the list still
+    reads as an instruction. The check narrows the hole; it does not close it.
+    """
+
+    COMMAND = "update_loop.py <feature> --root <root> --resume"
+
+    def phase_h(self, intro=None):
+        skill = read_visible("SKILL.md")
+        if intro is None:
+            return skill
+        old = ("A human resolves the cause, or changes the config that\n"
+               "   tripped a limit, and then lifts the halt:")
+        self.assertIn(old, skill, "the Phase H lead-in moved; update this probe")
+        return skill.replace(old, intro)
+
+    def test_the_shipped_phase_h_is_affirmative(self):
+        body = section(self.phase_h(), "#### Phase H - Halt", "SKILL.md")
+        self.assertIsNone(negated_by(body, self.COMMAND))
+
+    def test_a_never_run_lead_in_is_caught(self):
+        # Probe P1.
+        body = section(
+            self.phase_h("Never run this, it is not a supported operation:"),
+            "#### Phase H - Halt", "SKILL.md",
+        )
+        self.assertEqual(negated_by(body, self.COMMAND), "never run")
+
+    def test_an_inverted_instruction_is_caught(self):
+        # Probe P1b: the destructive route recommended, the real one forbidden.
+        body = section(
+            self.phase_h(
+                "A human deletes `loop.json` and starts over. "
+                "Whatever you do, never run:"
+            ),
+            "#### Phase H - Halt", "SKILL.md",
+        )
+        self.assertEqual(negated_by(body, self.COMMAND), "never run")
+
+    def test_a_nearby_negation_about_something_else_does_not_flag(self):
+        # Phase B reaches a correct `--halt executor` call through "do not
+        # retry". What keeps that affirmative is the vocabulary being
+        # verb-specific - `retry` is not one of its verbs - and not the width
+        # of the window, which was the retracted claim.
+        #
+        # The needle is the collapsed form on purpose. Passing the shipped
+        # backslash continuation verbatim matches no fence at all, which is how
+        # this test spent a round asserting nothing at any window width.
+        body = section(
+            read_visible("SKILL.md"), "#### Phase B - Execute one batch", "SKILL.md"
+        )
+        self.assertIn("do not retry", body)
+        command = "update_loop.py <feature> --root <root> --halt executor"
+        self.assertIn(
+            command,
+            collapsed(fenced_commands(body)),
+            "the needle matches no fence, so the assertion below proves nothing",
+        )
+        self.assertIsNone(negated_by(body, command))
+
+    def test_an_affirmative_copy_rescues_a_negated_one(self):
+        body = section(
+            self.phase_h("Never run this:"), "#### Phase H - Halt", "SKILL.md"
+        )
+        rescued = body + (
+            "\nLift the halt with:\n\n```bash\n"
+            "python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> --resume\n"
+            "```\n"
+        )
+        self.assertIsNone(negated_by(rescued, self.COMMAND))
+
+    #: Written out rather than derived from NEGATED_IMPERATIVES. A loop over
+    #: the tuple shrinks with it, so dropping four of the five verbs left the
+    #: test green over a vocabulary that no longer covered them.
+    SPELLED_OUT = (
+        "never run", "never call", "never invoke", "never use", "never pass",
+        "do not run", "do not call", "do not invoke", "do not use", "do not pass",
+        "don't run", "don't call", "don't invoke", "don't use", "don't pass",
+    )
+
+    def test_every_spelled_out_marker_is_detected(self):
+        for marker in self.SPELLED_OUT:
+            doc = f"## s\n\ntext\n\nYou should {marker} this:\n```bash\nthing --flag\n```\n"
+            self.assertEqual(negated_by(doc, "thing --flag"), marker, marker)
+
+    def test_the_spelled_out_list_and_the_vocabulary_agree(self):
+        # Either side growing without the other is the drift this catches.
+        self.assertEqual(sorted(self.SPELLED_OUT), sorted(NEGATED_IMPERATIVES))
+
+    def test_a_negation_wrapped_over_several_lines_is_still_read(self):
+        # Pins INTRO_LINES: an introducing sentence wraps, and the marker can
+        # land on its first line. A shorter window silently stops seeing it.
+        doc = (
+            "## s\n"
+            "Never run the command below under any circumstances. It was\n"
+            "withdrawn because it corrupted the state file, and the\n"
+            "replacement is documented in the section above. For the\n"
+            "record, this is what it used to look like:\n"
+            "```bash\nthing --flag\n```\n"
+        )
+        # The marker sits exactly INTRO_LINES above the fence, so a shorter
+        # window stops seeing it and this fails.
+        self.assertEqual(negated_by(doc, "thing --flag"), "never run")
+
+    def test_a_bare_negation_list_would_flag_shipped_prose(self):
+        # The measurement behind the vocabulary's shape, kept executable. If
+        # this stops finding anything, the verb-specific list is doing no work
+        # and the simpler one would have been fine.
+        bare = ("never", "do not", "don't", "rather than")
+        flagged = []
+        for relative, text in markdown_documents():
+            lines = visible(text).splitlines()
+            for opening, _ in fence_spans(lines):
+                intro = fence_intro(lines, opening).lower()
+                if any(word in intro for word in bare):
+                    flagged.append(relative)
+        self.assertTrue(
+            flagged,
+            "no shipped fence is introduced by a bare negation word, so the "
+            "verb-specific vocabulary is guarding against nothing",
+        )
+
+    def test_a_negation_directly_above_a_one_line_command_is_caught(self):
+        # The lookbehind used to be anchored to where the scan started matching
+        # rather than to the command, so an intro on the line above the fence
+        # fell outside its own window.
+        doc = "## s\n\ntext\n\nNever run this:\n```bash\nthing --flag\n```\n"
+        self.assertEqual(negated_by(doc, "thing --flag"), "never run")
+
+    def test_a_negated_inline_mention_is_caught(self):
+        # The H transition row is one line, so there is nothing above it to
+        # read; the negation sits before the command in the same cell.
+        row = "| `H` | Terminal. Whatever you do, never run `update_loop.py --resume`. |"
+        self.assertEqual(negated_by(row, "update_loop.py --resume", fenced=False), "never run")
+
+    def test_an_affirmative_inline_mention_passes(self):
+        row = "| `H` | Terminal. A human resolves the cause, then runs `update_loop.py --resume`. |"
+        self.assertIsNone(negated_by(row, "update_loop.py --resume", fenced=False))
+
+    def test_the_guard_itself_rejects_a_negated_inline_row(self):
+        # Through assert_instructs rather than negated_by directly. Calling the
+        # helper straight left the guard's own `fenced` plumbing untested, and
+        # forcing it to True there silently revives the dead-check bug: a row
+        # has no fence, so a fenced-only scan finds nothing to judge.
+        row = "| `H` | Terminal. Whatever you do, never run `update_loop.py --resume`. |"
+        with self.assertRaises(AssertionError):
+            assert_instructs(
+                self, row, "update_loop.py --resume", "the H transition row", fenced=False
+            )
+
+    def test_an_unterminated_fence_runs_to_the_end(self):
+        # `_fenced()` already assumes this; `fence_spans` has to agree with it
+        # or a document with an odd fence count would report a block that ends
+        # where no `` ``` `` is.
+        lines = "## s\n```bash\nthing --flag\nstill inside\n".splitlines()
+        self.assertEqual(fence_spans(lines), [(1, len(lines))])
+        doc = "## s\n\ntext\n\nNever run this:\n```bash\nthing --flag\n"
+        self.assertEqual(negated_by(doc, "thing --flag"), "never run")
+
+    def test_a_negation_after_an_inline_mention_does_not_flag(self):
+        # The anchor reads the text *before* the command. A row that gives the
+        # command and then qualifies it is an instruction, not a warning.
+        row = "| `H` | A human runs `update_loop.py --resume`; never run it twice. |"
+        self.assertIsNone(negated_by(row, "update_loop.py --resume", fenced=False))
+
+    def test_the_guard_itself_rejects_a_prose_only_command(self):
+        # Pins the fence requirement inside assert_instructs rather than only
+        # in fenced_commands, so dropping it there fails here.
+        doc = "## s\n\nrun `thing --flag` sometime\n\n```bash\nother --thing\n```\n"
+        with self.assertRaises(AssertionError):
+            assert_instructs(self, doc, "thing --flag", "the fake section")
+
+    def test_the_guard_itself_rejects_a_negated_fence(self):
+        # The fenced mirror of the row case above. Forcing `fenced` False here
+        # makes the scan read the affirmative prose mention instead of the
+        # block it is meant to judge, which is gap 5 coming back.
+        doc = ("## s\n\nrun `thing --flag` to proceed\n\ntext\n\n"
+               "Never run this:\n```bash\nthing --flag\n```\n")
+        with self.assertRaises(AssertionError):
+            assert_instructs(self, doc, "thing --flag", "the fake section")
+
+    def test_the_guard_itself_accepts_an_affirmative_inline_row(self):
+        row = "| `H` | Terminal. A human resolves the cause, then runs `update_loop.py --resume`. |"
+        assert_instructs(
+            self, row, "update_loop.py --resume", "the H transition row", fenced=False
+        )
+
+    def test_prose_cannot_rescue_a_negated_fence(self):
+        # `fenced=True` ignores mentions outside a block, so an affirmative
+        # sentence elsewhere in the scope does not answer for a warned-off call.
+        doc = ("## s\n\nrun `thing --flag` to proceed\n\ntext\n\n"
+               "Never run this:\n```bash\nthing --flag\n```\n")
+        self.assertEqual(negated_by(doc, "thing --flag"), "never run")
+
+    def test_the_vocabulary_flags_no_fence_in_any_shipped_document(self):
+        # The guard against a later addition quietly breaking valid prose.
+        #
+        # Through the production helpers, not a copy of them. The copy kept a
+        # clause split production had dropped, hardcoded the window, and read
+        # closing fences as openings - 30 fence lines where only 15 open one -
+        # so it could report a clean corpus while production flagged a real
+        # document.
+        offenders = []
+        for relative, text in markdown_documents():
+            lines = visible(text).splitlines()
+            for opening, _ in fence_spans(lines):
+                intro = fence_intro(lines, opening).lower()
+                marker = next((m for m in NEGATED_IMPERATIVES if m in intro), None)
+                if marker:
+                    offenders.append(f"{relative}:{opening + 1} ({marker!r})")
+        self.assertEqual(
+            offenders,
+            [],
+            "these shipped fences read as negated by the vocabulary; either the "
+            "prose is wrong or the vocabulary is too broad:\n" + "\n".join(offenders),
+        )
+
+
+class AnInstructionLivesInAFence(unittest.TestCase):
+    """INTENT-02: a command named in passing is not a command being given.
+
+    Every shipped instruction to run something is a fenced block. Asserting
+    over the whole scope let a mention in surrounding prose answer for the
+    block a criterion actually names.
+    """
+
+    DOC = "## s\n\nrun `thing --flag` sometime\n\n```bash\nthing --other\n```\n"
+
+    def test_prose_outside_a_fence_is_not_an_instruction(self):
+        self.assertNotIn("thing --flag", fenced_commands(self.DOC))
+
+    def test_the_fenced_call_is_returned(self):
+        self.assertIn("thing --other", fenced_commands(self.DOC))
+
+    def test_a_scope_with_no_fence_yields_nothing(self):
+        self.assertEqual(fenced_commands("## s\n\njust prose, no block\n").strip(), "")
+
+    def test_the_backslash_continuation_still_matches(self):
+        body = section(read_visible("SKILL.md"), "#### Phase H - Halt", "SKILL.md")
+        self.assertIn(
+            "update_loop.py <feature> --root <root> --resume",
+            collapsed(fenced_commands(body)),
+        )
+
+    def test_moving_the_command_into_prose_fails_the_guard(self):
+        skill = read_visible("SKILL.md")
+        body = section(skill, "#### Phase H - Halt", "SKILL.md")
+        start = body.index("   ```bash")
+        block = body[start:body.index("```\n", start + 10) + 4]
+        as_prose = block.replace("```bash\n", "").replace("```\n", "")
+        edited = skill.replace(block, as_prose)
+        self.assertNotEqual(edited, skill, "the Phase H block moved; update this probe")
+        rescoped = section(edited, "#### Phase H - Halt", "SKILL.md")
+        # Still present in the section, and that is exactly the point: presence
+        # is what the old guard proved, and prose is not an instruction.
+        self.assertIn("update_loop.py <feature> --root <root> --resume", collapsed(rescoped))
+        self.assertNotIn(
+            "update_loop.py <feature> --root <root> --resume",
+            collapsed(fenced_commands(rescoped)),
+        )
+
+
+class AFencedHashIsCodeNotStructure(unittest.TestCase):
+    """INTENT-04: a `#` inside a code block does not end a section.
+
+    The opposite failure to the rest of this file, and the cheaper one to hit:
+    a contributor adding a shell comment to a bash example would shrink the
+    scope of a guard that has nothing to do with their edit. Probe P7 from the
+    halt-resume verifier killed exactly that harmless change.
+    """
+
+    DOC = (
+        "## first\n\ntext\n\n```bash\n# not a heading\nrun --thing\n```\n\n"
+        "more first-section text\n\n## second\n\nother\n"
+    )
+
+    def test_a_fenced_hash_does_not_end_the_section(self):
+        body = section(self.DOC, "## first", "fake.md")
+        self.assertIn("more first-section text", body)
+
+    def test_the_section_still_ends_at_the_real_heading(self):
+        body = section(self.DOC, "## first", "fake.md")
+        self.assertNotIn("## second", body)
+        self.assertNotIn("other", body)
+
+    def test_the_fenced_line_is_still_part_of_the_section(self):
+        self.assertIn("# not a heading", section(self.DOC, "## first", "fake.md"))
+
+    def test_a_shell_comment_in_phase_h_leaves_the_guard_passing(self):
+        # Probe P7 replayed against the shipped document.
+        skill = read_visible("SKILL.md")
+        edited = skill.replace(
+            "   python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> \\\n"
+            "     --resume",
+            "# resolve the cause first\n"
+            "   python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> \\\n"
+            "     --resume",
+        )
+        self.assertNotEqual(edited, skill, "the Phase H block moved; update this probe")
+        body = section(edited, "#### Phase H - Halt", "SKILL.md")
+        # Through the same helpers the real guard uses, so the probe mirrors it.
+        self.assertIn(
+            "update_loop.py <feature> --root <root> --resume",
+            collapsed(fenced_commands(body)),
+        )
+        self.assertNotIn("### Step 3", body)
+
+
+class HtmlCommentsAreNotDocumentation(unittest.TestCase):
+    """INTENT-01: the guards read what the document shows, not what it holds."""
+
+    def test_a_single_line_comment_is_removed(self):
+        self.assertEqual(visible("keep <!-- drop --> keep"), "keep  keep")
+
+    def test_a_comment_spanning_lines_is_removed(self):
+        self.assertEqual(visible("a\n<!-- one\ntwo\nthree -->\nb"), "a\n\nb")
+
+    def test_an_unterminated_comment_hides_the_rest(self):
+        # What a renderer does with it. A guard that kept reading would be the
+        # one reader still counting text nobody sees.
+        self.assertEqual(visible("shown\n<!-- swallowed\nalso swallowed"), "shown\n")
+
+    def test_text_with_no_comment_is_returned_unchanged(self):
+        text = read_shipped("references/recovery-loop.md")
+        self.assertEqual(visible(text), text)
+
+    def test_the_legitimate_template_keeps_its_content(self):
+        # `assets/iteration-summary.template.md` annotates fields with HTML
+        # comments on purpose. Stripping them must leave the fields.
+        stripped = visible(read_shipped("assets/iteration-summary.template.md"))
+        self.assertIn("{{ outcome }}", stripped)
+        self.assertIn("{{ gate_level }}", stripped)
+        self.assertNotIn("<!--", stripped)
+
+
 def section(text, heading, where):
     """The body of one section, from `heading` to the next heading of its level.
 
@@ -438,19 +835,145 @@ def section(text, heading, where):
     neighbouring section still satisfies a search over the whole document, so a
     whole-file check cannot tell "documented here" from "documented somewhere",
     which is the only thing these criteria actually ask.
+
+    Ends at the next heading of the same level *or shallower*. Stopping only at
+    the same level would run a last-child section to end of file, which is no
+    scope at all - the one `#### Phase H` hit before that was fixed.
+
+    Lines inside a fenced block are skipped, so a shell comment in a bash
+    example stays code. `_fenced()` is defined further down, next to the other
+    scan it serves; Python resolves the name when this is called.
     """
-    start = text.find(heading)
-    if start < 0:
+    lines = text.splitlines(keepends=True)
+    start = next((n for n, line in enumerate(lines) if line.startswith(heading)), None)
+    if start is None:
         raise AssertionError(f"{where}: the section anchored on {heading!r} is gone")
-    # Ends at the next heading of the same level *or shallower*. Stopping only
-    # at the same level would run a last-child section to end of file, which is
-    # no scope at all - the one `#### Phase H` hit before this was fixed.
     level = len(heading) - len(heading.lstrip("#"))
-    rest = text[start + len(heading):]
-    ends = [found for found in
-            (rest.find("\n" + "#" * depth + " ") for depth in range(1, level + 1))
-            if found >= 0]
-    return heading + rest[:min(ends)] if ends else heading + rest
+    fenced = _fenced(lines)
+    end = len(lines)
+    for number in range(start + 1, len(lines)):
+        if number in fenced:
+            continue
+        depth = len(lines[number]) - len(lines[number].lstrip("#"))
+        if 0 < depth <= level and lines[number][depth:depth + 1] == " ":
+            end = number
+            break
+    return "".join(lines[start:end])
+
+
+#: Negated imperatives that turn a call into a warning about it. The list is
+#: verb-specific, and that is measured rather than assumed: a list of bare
+#: negation words flags shipped fences that are perfectly affirmative -
+#: `rather than` introduces three of them, and Phase B step 1 reaches a correct
+#: `--halt executor` call through "do not retry - a timeout is an executor
+#: failure, not a flake:". `test_a_bare_negation_list_would_flag_shipped_prose`
+#: keeps that measurement executable instead of leaving it as a claim.
+#:
+#: This narrows the hole; it does not close it. A negation phrased outside the
+#: list ("this call was removed in 0.4:") still reads as an instruction to the
+#: guard. Substring parity cannot read intent, and pretending otherwise is
+#: worse than recording the limit.
+IMPERATIVE_VERBS = ("run", "call", "invoke", "use", "pass")
+
+NEGATED_IMPERATIVES = tuple(
+    f"{negation} {verb}"
+    for negation in ("never", "do not", "don't")
+    for verb in IMPERATIVE_VERBS
+)
+
+#: How many lines above a fence count as the prose introducing it.
+INTRO_LINES = 4
+
+
+def fence_spans(lines):
+    """`(opening, closing)` line index for every fenced block.
+
+    An unterminated fence runs to the end, which is what `_fenced()` already
+    assumes and what a renderer does with it.
+    """
+    spans, opening = [], None
+    for number, line in enumerate(lines):
+        if not line.lstrip().startswith("```"):
+            continue
+        if opening is None:
+            opening = number
+        else:
+            spans.append((opening, number))
+            opening = None
+    if opening is not None:
+        spans.append((opening, len(lines)))
+    return spans
+
+
+def fence_intro(lines, opening):
+    """The prose introducing the fence that opens at line `opening`.
+
+    One definition, used by `negated_by` and by the test that asserts the
+    vocabulary flags nothing shipped. That test used to recompute this, and
+    drifted from it: it kept a clause split production had dropped, hardcoded
+    the window, and counted closing fences as openings - so it could report a
+    clean corpus while production flagged a real document.
+    """
+    return " ".join(lines[max(0, opening - INTRO_LINES):opening])
+
+
+def negated_by(text, command, fenced=True):
+    """The negated imperative introducing `command`, or None.
+
+    The lookbehind is anchored to the command's own position - the lines above
+    its fence, or the text before it on its own line - not to wherever a scan
+    happened to start matching. Anchoring it to the scan instead let a negation
+    sitting directly above a one-line command fall outside its own lookbehind.
+
+    `fenced` selects which occurrences count, mirroring the guard: a criterion
+    naming a fenced call must not be rescued by an affirmative mention in
+    prose, and one naming an inline mention has no fence to read.
+
+    One affirmative occurrence is enough. A section that warns against a call
+    in one place and gives it in another still documents the supported route.
+    """
+    found = None
+    lines = text.splitlines()
+    if fenced:
+        places = [
+            (fence_intro(lines, opening), " ".join(lines[opening + 1:closing]))
+            for opening, closing in fence_spans(lines)
+        ]
+    else:
+        inside = _fenced(lines)
+        places = [
+            (line.split(command, 1)[0], line)
+            for number, line in enumerate(lines)
+            if number not in inside and command in line
+        ]
+    for intro, body in places:
+        if command not in collapsed(body):
+            continue
+        marker = next((m for m in NEGATED_IMPERATIVES if m in intro.lower()), None)
+        if marker is None:
+            return None
+        found = found or marker
+    return found
+
+
+def fenced_commands(text):
+    """Only the lines of `text` that sit inside a fenced block.
+
+    Every instruction to run something in these documents is a fenced call, so
+    a criterion naming a command means the block, not a mention of it. Asserting
+    over the whole scope let surrounding prose answer for the block - which is
+    how "never run this:" above the real call passed.
+
+    Returns the fence bodies joined, with the fence markers dropped. A scope
+    with no fence yields an empty string rather than raising, so the guard
+    fails with its own message instead of a traceback.
+    """
+    lines = text.splitlines(keepends=True)
+    fenced = _fenced(lines)
+    return "".join(
+        line for number, line in enumerate(lines)
+        if number in fenced and not line.lstrip().startswith("```")
+    )
 
 
 def collapsed(text):
@@ -496,12 +1019,10 @@ class GateAttemptHasADocumentedWriter(unittest.TestCase):
         )
 
     def test_the_call_sits_in_the_phase_that_runs_the_gate(self):
-        body = section(read_shipped("SKILL.md"), "#### Phase B - Execute one batch", "SKILL.md")
-        self.assertIn(
-            "update_loop.py <feature> --root <root> --gate-attempt",
-            collapsed(body),
-            "SKILL.md does not record a failed gate in Phase B, the only phase "
-            "that runs one",
+        body = section(read_visible("SKILL.md"), "#### Phase B - Execute one batch", "SKILL.md")
+        assert_instructs(
+            self, body, "update_loop.py <feature> --root <root> --gate-attempt",
+            "Phase B, the only phase that runs a gate",
         )
 
     def test_the_recovery_loop_carves_the_exception_in_both_rules(self):
