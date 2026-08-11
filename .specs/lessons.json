@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 22,
+  "next_id": 25,
   "lessons": [
     {
       "id": "L-001",
@@ -383,6 +383,60 @@
       ],
       "created": "2026-08-11T14:01:35Z",
       "last_seen": "2026-08-11T14:01:35Z"
+    },
+    {
+      "id": "L-022",
+      "key": "surviving_mutant::a documentation guard that matches a command as a substring passes on a negated or commented out copy of it so bind the match to the affirmative instruction rather than to the characters",
+      "text": "A documentation guard that matches a command as a substring passes on a negated or commented-out copy of it, so bind the match to the affirmative instruction rather than to the characters",
+      "signal": "surviving_mutant",
+      "scope": "docs-parity",
+      "status": "candidate",
+      "features": [
+        "halt-resume"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "scripts/test_unit_docs_parity.py:456-463 (mutants P1, P1b, P2) (docs-parity)"
+      ],
+      "created": "2026-08-11T14:25:09Z",
+      "last_seen": "2026-08-11T14:25:09Z"
+    },
+    {
+      "id": "L-023",
+      "key": "surviving_mutant::a test helper that returns the first matching line or heading binds the assertion to whichever passage comes first so raise when more than one matches instead of silently picking one",
+      "text": "A test helper that returns the first matching line or heading binds the assertion to whichever passage comes first, so raise when more than one matches instead of silently picking one",
+      "signal": "surviving_mutant",
+      "scope": "test-helpers",
+      "status": "candidate",
+      "features": [
+        "halt-resume"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "scripts/test_unit_docs_parity.py:466-471 (mutant P3) (test-helpers)"
+      ],
+      "created": "2026-08-11T14:25:09Z",
+      "last_seen": "2026-08-11T14:25:09Z"
+    },
+    {
+      "id": "L-024",
+      "key": "spec_precision_gap::when a criterion names a full command and a qualifying clause assert both not just the distinguishing flag",
+      "text": "When a criterion names a full command and a qualifying clause, assert both, not just the distinguishing flag",
+      "signal": "spec_precision_gap",
+      "scope": "docs-parity",
+      "status": "candidate",
+      "features": [
+        "halt-resume"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "scripts/test_unit_docs_parity.py:389 (mutants P5, P6) (docs-parity)"
+      ],
+      "created": "2026-08-11T14:25:09Z",
+      "last_seen": "2026-08-11T14:25:09Z"
     }
   ]
 }

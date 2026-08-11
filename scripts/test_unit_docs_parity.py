@@ -380,14 +380,14 @@ class ClearingAHaltHasOneSupportedRoute(unittest.TestCase):
     # present *somewhere* in the file is not what any of them ask for, and a
     # whole-file search passed while the mention sat in an unrelated section.
 
-    def test_the_transition_row_names_the_flag(self):
+    def test_the_transition_row_names_the_command(self):
         row = table_row(
             read_shipped("references/phase-transitions.md"),
             "| `H` |",
             "references/phase-transitions.md",
         )
         self.assertIn(
-            "--resume",
+            "update_loop.py --resume",
             row,
             "the H transition row says how a halt clears without naming the "
             "command that clears it",
@@ -423,12 +423,12 @@ class ClearingAHaltHasOneSupportedRoute(unittest.TestCase):
         )
         self.assertIn("blast_radius", schema)
         self.assertNotIn("## `iterations[]`", schema)
-        row = table_row(
-            read_shipped("references/phase-transitions.md"),
-            "| `H` |",
-            "references/phase-transitions.md",
-        )
-        self.assertNotIn("\n", row)
+        # `table_row` cannot silently pick between candidates: a decoy row
+        # planted above the real one would otherwise answer for it.
+        transitions = read_shipped("references/phase-transitions.md")
+        decoyed = transitions.replace("| `H` |", "| `H` | a decoy |\n| `H` |", 1)
+        with self.assertRaises(AssertionError):
+            table_row(decoyed, "| `H` |", "references/phase-transitions.md")
 
 
 def section(text, heading, where):
@@ -464,11 +464,18 @@ def collapsed(text):
 
 
 def table_row(text, prefix, where):
-    """The one table row starting with `prefix`."""
-    for line in text.splitlines():
-        if line.startswith(prefix):
-            return line
-    raise AssertionError(f"{where}: the table row starting {prefix!r} is gone")
+    """The one table row starting with `prefix`.
+
+    Raises on more than one match rather than taking the first: a second row
+    with the same prefix could answer for the real one, and which of them the
+    scan reads would be decided by document order.
+    """
+    rows = [line for line in text.splitlines() if line.startswith(prefix)]
+    if len(rows) != 1:
+        raise AssertionError(
+            f"{where}: expected exactly one table row starting {prefix!r}, found {len(rows)}"
+        )
+    return rows[0]
 
 
 class GateAttemptHasADocumentedWriter(unittest.TestCase):
