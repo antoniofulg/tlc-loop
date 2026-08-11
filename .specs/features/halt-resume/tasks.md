@@ -10,7 +10,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 **Spec**: `.specs/features/halt-resume/spec.md`
 **Design**: none - no architectural decision. `--resume` is an additive flag on the existing single writer.
-**Status**: Draft
+**Status**: Done - all 8 tasks committed
 
 ---
 
@@ -281,7 +281,7 @@ T6 → T7 → T8
 
 ---
 
-### T8: Replace the hand-edit halt clearing with `--resume`
+### T8: Replace the hand-edit halt clearing with `--resume` ✅
 
 **What**: Rewrite the transition-table row that tells a human to clear `halt.reason` by hand, and add that phrasing to the retracted-claim scan so it cannot return.
 **Where**: `references/phase-transitions.md`
@@ -384,6 +384,6 @@ No task carries `Tests: none`. T6 and T7 add no new parity test of their own: bo
 | RESUME-03 | T1 | Verified in T1 |
 | RESUME-04 | T3 | Verified in T3 |
 | RESUME-05 | T4, T5 | Verified in T4+T5 |
-| RESUME-06 | T6, T7, T8 | Pending |
+| RESUME-06 | T6, T7, T8 | Verified in T6+T7+T8 |
 
 **Coverage:** 6 total, 6 mapped to tasks, 0 unmapped.

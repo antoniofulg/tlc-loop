@@ -333,6 +333,62 @@ class StageRoutingContractParity(unittest.TestCase):
         self.assertIn("validate_routing.py", readme)
 
 
+#: Phrasings that send the reader to an editor to lift a halt. The transition
+#: table shipped one for two releases: a halt cleared "by a human resolving the
+#: cause and clearing `halt.reason`", while `state-schema.md` said the file is
+#: machine-owned and must not be hand-edited. A reader who followed the first
+#: literally had to break the second, and `update_loop.py --resume` is the
+#: transition that makes both true at once.
+HAND_CLEARED_HALT = (
+    "clearing `halt.reason`",
+    "clearing halt.reason",
+    "clear `halt.reason`",
+    "clear halt.reason",
+)
+
+
+class ClearingAHaltHasOneSupportedRoute(unittest.TestCase):
+    """RESUME-06: the prose points at the flag, never at an editor."""
+
+    def test_no_shipped_document_sends_the_reader_to_the_field(self):
+        offenders = []
+        for relative, text in shipped_documents():
+            for claim in HAND_CLEARED_HALT:
+                for number, line in offending_lines(text, claim):
+                    offenders.append(f"{relative}:{number} ({claim!r}): {line}")
+        self.assertEqual(
+            offenders,
+            [],
+            "these lines tell a reader to lift a halt by hand; `loop.json` is "
+            "machine-owned and `update_loop.py --resume` is the transition:\n"
+            + "\n".join(offenders),
+        )
+
+    def test_a_reintroduced_instruction_is_named_with_its_location(self):
+        planted = "A halt clears only by a human clearing `halt.reason`.\n"
+        offenders = [
+            f"fake.md:{number} ({claim!r}): {line}"
+            for claim in HAND_CLEARED_HALT
+            for number, line in offending_lines(planted, claim)
+        ]
+        self.assertTrue(offenders)
+        self.assertIn("fake.md:1", offenders[0])
+
+    def test_the_documents_that_describe_the_halt_name_the_flag(self):
+        # Retraction without replacement leaves the reader with nothing, which
+        # is how the hand-edit instruction survived a rewrite the last time.
+        for relative in (
+            "references/phase-transitions.md",
+            "references/state-schema.md",
+            "SKILL.md",
+        ):
+            self.assertIn(
+                "--resume",
+                read_shipped(relative),
+                f"{relative} describes the halt but not the flag that lifts it",
+            )
+
+
 def phase_section(text, heading):
     """The body of one `#### Phase X` branch of SKILL.md.
 
