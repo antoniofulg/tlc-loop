@@ -68,6 +68,7 @@ ACTION_FLAGS = (
     "gaps",
     "report",
     "halt",
+    "resume",
     "status",
 )
 
@@ -100,6 +101,11 @@ def build_parser():
     parser.add_argument("--gaps", type=int, help="Gaps left open by the last verify round")
     parser.add_argument("--report", help="Path of the last validation report")
     parser.add_argument("--halt", choices=HALT_REASONS)
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Lift a recorded halt: clear it and return the run to active",
+    )
     parser.add_argument("--detail", help="Free text explaining the halt")
     parser.add_argument("--status", choices=_state_io.STATUSES)
     parser.add_argument("--objective", help=argparse.SUPPRESS)
@@ -128,6 +134,26 @@ def _not_completable(state, root, feature):
             "HEAD is neither the verified commit nor a valid seal over it, so "
             "the recorded PASS does not describe this tree"
         )
+    return None
+
+
+def _not_resumable(state):
+    """Why `--resume` must be refused, or None when the halt may be lifted.
+
+    Resuming lifts a recorded halt, so there has to be one: without this check
+    `--resume` on a healthy run would read as a no-op that succeeded. `complete`
+    is refused ahead of that, because a finished run has nothing to resume and
+    reopening it would contradict the verdict `--status complete` already
+    checked against the tree.
+
+    Deliberately not checked: that `status` is `halted`. An `active` run still
+    carrying a `halt.reason` is exactly what `--status active` produces on its
+    own, and that state is the one most in need of this flag.
+    """
+    if state.get("status") == "complete":
+        return "the run is recorded as complete"
+    if not (state.get("halt") or {}).get("reason"):
+        return "no halt is recorded"
     return None
 
 
@@ -188,6 +214,14 @@ def apply(state, args):
     if args.halt:
         state["halt"] = {"reason": args.halt, "detail": args.detail}
         state["status"] = "halted"
+
+    if args.resume:
+        # The inverse of the block above, and the only one there is. Counters
+        # are left alone on purpose: a resume that also zeroed `gate_attempts`
+        # would turn every halt into an unlimited retry budget, so a derived
+        # condition that still holds halts the run again on the next detect.
+        state["halt"] = {"reason": None, "detail": None}
+        state["status"] = "active"
     # An explicit status is applied last so it wins over the halt default,
     # which is how a proven external blocker becomes `blocked` rather than
     # `halted`.
@@ -232,6 +266,12 @@ def main(argv=None):
             file=sys.stderr,
         )
         return 2
+    if args.resume and args.halt:
+        print(
+            "update_loop: --resume and --halt contradict each other; pass one",
+            file=sys.stderr,
+        )
+        return 2
     if not any(getattr(args, name) for name in ACTION_FLAGS):
         print("update_loop: nothing to do; pass at least one action flag", file=sys.stderr)
         return 2
@@ -250,6 +290,12 @@ def main(argv=None):
         refusal = _not_completable(state, root, args.feature)
         if refusal:
             print(f"update_loop: refusing --status complete: {refusal}", file=sys.stderr)
+            return 2
+
+    if args.resume:
+        refusal = _not_resumable(state)
+        if refusal:
+            print(f"update_loop: refusing --resume: {refusal}", file=sys.stderr)
             return 2
 
     try:
