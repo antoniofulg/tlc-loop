@@ -56,27 +56,6 @@ import _state_io  # noqa: E402
 import _tasksmd  # noqa: E402
 
 
-def _verification_covers_head(state, root):
-    """Whether the recorded PASS describes the tree as it stands now.
-
-    `validate_state.py` reads the report and answers "does this say PASS with
-    evidence". It cannot answer "is this report about the current code", and a
-    task committed after a PASS would otherwise ship as verified without any
-    verifier having seen it.
-
-    A verdict is recorded together with the commit it covered
-    (`verify.verified_at`, written by `update_loop.py --verify-round`). The PASS
-    counts only while that commit is still HEAD. An absent value means no
-    verification is on record for this state - after a rebuilt `loop.json`, for
-    instance - and is treated as uncovered, which costs one verify round and
-    never declares an unverified tree done.
-    """
-    verified_at = ((state.get("verify") or {}).get("verified_at")) or None
-    if verified_at is None:
-        return False
-    return verified_at == _gitio.head_commit(root)
-
-
 def _quote(text):
     """Render a halt detail as one double-quoted token."""
     flat = " ".join(str(text or "").split())
@@ -252,8 +231,8 @@ def main(argv=None):
         return 0
 
     # 6. Nothing pending. The sibling validator decides whether the report says
-    #    PASS - and `_verification_covers_head` decides whether that PASS still
-    #    describes this tree.
+    #    PASS - and `_gitio.verification_covers_head` decides whether that PASS
+    #    still describes this tree.
     try:
         validator = _paths.tlc_script("validate_state.py")
     except _paths.SiblingSkillError as exc:
@@ -264,24 +243,40 @@ def main(argv=None):
         capture_output=True,
         text=True,
     )
-    if finished.returncode == 0 and _verification_covers_head(state, root):
+    verify = state.get("verify") or {}
+    covered = _gitio.verification_covers_head(state, root, feature)
+    if finished.returncode == 0 and covered:
         print(_line("phase=E action=done", notes))
         return 0
 
-    # 7. Not done, so another round is due - unless the configured budget for
-    #    them is spent. Checked here, ahead of both round-dispatching phases:
-    #    the ceiling exists to stop rounds, so it has to be answered before one
-    #    is named (LOOP-04 AC 4). A PASS never reaches this point; step 6
-    #    already closed the feature.
-    verify = state.get("verify") or {}
-    rounds = int(verify.get("rounds") or 0)
+    # 7. A PASS the tree has moved past closes its verification epoch. The
+    #    rounds it spent belonged to a lineage that no longer exists, so the
+    #    tree standing here now is owed a fresh look on a fresh budget.
+    #
+    #    This is the line the incident hung on: a genuine PASS went stale, and a
+    #    ceiling counting every round the run had ever done refused to authorise
+    #    the round it had just asked for - reporting, in a run with a real PASS
+    #    on record, that no PASS had happened.
+    #
+    #    A FAIL is not an epoch boundary. FAIL, fix, re-verify is exactly the
+    #    cycle the ceiling exists to stop, so it keeps spending from the budget
+    #    however many commits the fixes take.
+    reopened = verify.get("last_verdict") == "PASS" and not covered
+    rounds = 0 if reopened else int(verify.get("epoch_rounds") or 0)
+
+    # 8. Another round is due - unless this epoch's budget is spent. Checked
+    #    ahead of both round-dispatching phases: the ceiling exists to stop
+    #    rounds, so it has to be answered before one is named (LOOP-04 AC 4).
     ceiling = config["verify"].get("max_rounds")
     if ceiling is not None and rounds >= ceiling:
-        detail = f"{rounds} verify round(s) without a PASS, max_rounds {ceiling}"
+        detail = (
+            f"{rounds} verify round(s) in this epoch without a PASS, "
+            f"max_rounds {ceiling}"
+        )
         print(f"phase=H action=halt reason=verify_exhausted detail={_quote(detail)}")
         return 0
 
-    # 8. Fix the gaps a FAIL round left open, else verify again.
+    # 9. Fix the gaps a FAIL round left open, else verify again.
     if verify.get("last_verdict") == "FAIL" and int(verify.get("gaps_open") or 0) > 0:
         print(_line(f"phase=F action=fix round={rounds}", notes))
         return 0

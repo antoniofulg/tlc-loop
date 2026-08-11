@@ -66,10 +66,13 @@ plus `detail`, and nothing follows a halt that could act on the observation.
   when `execute.strict_routing` is false. The field is the input to
   `resolve_stage.py`; consumers never infer it from the phase title.
 - `round=<N>` on `phase=V` is the verify round about to run:
-  `verify.rounds + 1`.
+  `verify.epoch_rounds + 1`. It counts within the current verification epoch,
+  so a tree that has moved past a PASS is offered `round=1` rather than the
+  next number in a sequence that ended
+  ([verification-freshness.md](verification-freshness.md)).
 - `round=<N>` on `phase=F` is the round whose gaps are being fixed:
-  `verify.rounds`. A fix belongs to the round that found the gaps, so `V round=2`
-  following `F round=1` reads as one cycle rather than two.
+  `verify.epoch_rounds`. A fix belongs to the round that found the gaps, so
+  `V round=2` following `F round=1` reads as one cycle rather than two.
 - `reconciled=<ids>` lists, comma separated, the tasks a human ticked in
   `tasks.md` that git does not confirm. Present only when there is at least
   one, and only on `phase=B`: a task git has not confirmed is by definition
@@ -111,18 +114,20 @@ contract, not an implementation detail.
    always closes a batch.
 7. **Ask the validator, then ask how old its answer is.** `validate_state.py`
    exiting 0 says the report reads PASS with evidence. It cannot say whether
-   the report describes *this* code. So the PASS counts only while
-   `verify.verified_at` - the commit stamped onto the verdict by
-   `update_loop.py --verify-round` - is still HEAD. Both true → `phase=E`.
+   the report describes *this* code, so the answer is passed to
+   `_gitio.verification_covers_head`. Both true → `phase=E`.
 
    A commit landing after a PASS therefore returns detection to `phase=V`
    rather than closing the feature: otherwise a task would ship as verified
-   with no verifier having seen it. An absent `verified_at` counts as
-   uncovered - after a rebuilt `loop.json`, for instance - which costs one
-   verify round and never declares an unverified tree done.
-8. **Check the verify budget.** `verify.rounds` having reached
+   with no verifier having seen it. The one exception is a **seal**, the commit
+   that versions `validation.md` without unverifying the tree it describes.
+   Coverage, the seal and everything it refuses are specified in
+   [verification-freshness.md](verification-freshness.md); nothing about them is
+   restated here.
+8. **Check the verify budget.** `verify.epoch_rounds` having reached
    `verify.max_rounds` → `phase=H reason=verify_exhausted`. An absent
-   `max_rounds` is unlimited and never fires.
+   `max_rounds` is unlimited and never fires. A PASS the tree has moved past
+   closes its epoch, so the counter it left behind does not bound the next one.
 9. **Otherwise** → `phase=F` when the last verdict was `FAIL` with
    `gaps_open > 0`, else `phase=V`.
 
@@ -214,6 +219,13 @@ at step 8, after the validator has been asked, for two reasons.
 A PASS must win. The condition is "the rounds are spent **without a PASS**", so
 a feature that verified successfully on its last available round is done, not
 halted. Asking the validator first is what makes that true.
+
+That was already the rule and it was not enough. A PASS that has gone stale is
+not a PASS for step 7, so a run that verified on its last round and then took
+one more commit fell through to a ceiling counting rounds it had already spent -
+and was told, in a run with a real PASS on record, that no PASS had happened.
+The budget is per epoch for that reason; see
+[verification-freshness.md](verification-freshness.md).
 
 Pending work must win too. The ceiling exists to stop verify and fix rounds
 from repeating forever; it says nothing about a batch that has not run yet. A

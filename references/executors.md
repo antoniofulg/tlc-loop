@@ -174,8 +174,11 @@ Three constraints, all load-bearing:
 
 **Returns:** a verdict of PASS or FAIL, per-AC evidence with `file:line`
 citations, the sensor result, and a ranked gap list. It writes
-`validation.md`; the orchestrator records the verdict through
-`update_loop.py`.
+`validation.md` and, like every executor, does not commit it: the orchestrator
+records the verdict through `update_loop.py` and, on a PASS, commits the report
+with `checkpoint.py --seal`. That is the one commit allowed to follow a
+verification without invalidating it - see
+[verification-freshness.md](verification-freshness.md).
 
 ### Fix implementer
 

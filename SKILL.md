@@ -3,7 +3,7 @@ name: tlc-loop
 description: Unattended execution loop for an approved tlc-spec-driven tasks.md: detects the phase from git commit trailers, dispatches batches to per-stage configurable providers, commits each task atomically, repairs its own failures, and halts with a recorded reason instead of stalling. Use when running a formal tasks.md to a verified PASS without per-batch prompting, resuming an interrupted run, or supplying the stage-routing contract when named beside tlc-spec-driven during Tasks. Another skill reaches it when tlc-spec-driven delegates Execute to loop mode. Triggers on "run the loop" and "resume the loop". Do NOT take ownership of Specify, Design, or Tasks authoring - those stay interactive in tlc-spec-driven.
 license: CC-BY-4.0
 metadata:
-  version: 0.2.0
+  version: 0.3.0
 ---
 
 # Unattended Execution Loop
@@ -72,6 +72,20 @@ git trailers. `update_loop.py` is the only writer of `loop.json` after
 bootstrap. Never hand-edit `loop.json`, and never commit outside
 `checkpoint.py`.
 
+**A verdict covers HEAD, or it counts for nothing.** A PASS describes the tree
+the verifier read, and anything committed afterwards is unverified code however
+green the gates. `checkpoint.py` refuses ordinary commits at `phase=E` and
+`phase=H`; `--seal` and `--reopen` are the two named routes for a change that
+must land after a PASS. Read
+[verification-freshness.md](references/verification-freshness.md) **in full**
+the moment a verify round returns PASS, a commit has to land after one, or a
+`verify_exhausted` halt appears. It is the only place coverage, the seal,
+epochs, the finalizer and the publish preflight are described.
+
+**Only `finish_loop.py` prints the done-signature.** Not this document, not the
+model, not `loop.sh`. Deciding a run is finished is a deterministic check over
+git and `loop.json`, and it is that script's decision alone.
+
 **An executor never commits, and its evidence is never trusted.** Both rules
 are stated verbatim in every payload. Read
 [executors.md](references/executors.md) in full before building any payload.
@@ -131,7 +145,8 @@ network, no model calls.
 | `detect_phase.py` | read-only; prints the next action | every iteration |
 | `validate_routing.py` | read-only; validates and prints the Tasks stage map | Tasks |
 | `update_loop.py` | the only mutator of `loop.json` | every iteration |
-| `checkpoint.py` | mutating; the atomic per-task commit and its trailers | B, F |
+| `checkpoint.py` | mutating; the only writer of commits, in three named modes | B, F, V, E |
+| `finish_loop.py` | mutating; the only printer of the done-signature | E |
 | `resolve_stage.py` | read-only; turns a configured stage into a concrete invocation | B, V, F |
 | `loop.sh` | mutating; spawns the respawn agent across turns | continuation |
 | `_paths` `_state_io` `_config` `_gitio` `_tasksmd` `_routing` `_batching` | support modules | imported, never invoked |
@@ -270,23 +285,37 @@ Done when: every task in the batch carries a `Task:` trailer.
 2. It runs **read-only over the real tree**. Its discrimination sensor mutates
    only a scratch copy, which is discarded. It does not fix.
 3. It writes `.specs/features/<feature>/validation.md`: verdict, per-AC
-   evidence with `file:line` citations, sensor result, diff range.
+   evidence with `file:line` citations, sensor result, diff range. It does not
+   commit it - see step 6.
 4. Record the verdict:
    ```bash
    python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> \
      --verify-round FAIL --gaps 2 --report .specs/features/<feature>/validation.md \
      --iteration-done --phase V --action "verify round 1"
    ```
+   This stamps `verify.verified_at` with the commit the round covered, which is
+   what a later detect compares against HEAD.
 5. On FAIL, distil the grounded failures into lessons with the sibling's
    `lessons.py`. A clean PASS records nothing.
-6. `verify.max_rounds` is enforced by the detector, not by you. Once the rounds
-   are spent without a PASS, the next detect prints
-   `phase=H action=halt reason=verify_exhausted` in place of another round.
-   Record the verdict as above and re-enter detection; do not start a round the
-   detect line did not name.
+6. **On a PASS, seal the report** once the next detect prints `phase=E`:
+   ```bash
+   python3 <skill-dir>/scripts/checkpoint.py <feature> --root <root> --seal
+   ```
+   Committing the report any other way moves HEAD off the verified commit and
+   reopens verification. The seal is the one commit that does not, and it
+   refuses anything but the report itself. Exit 2 names what it found in the
+   tree. See
+   [verification-freshness.md](references/verification-freshness.md).
+7. `verify.max_rounds` is enforced by the detector, not by you. It bounds the
+   **current epoch**, not the run: once this epoch's rounds are spent without a
+   PASS, the next detect prints
+   `phase=H action=halt reason=verify_exhausted` in place of another round. A
+   commit landing after a PASS opens a new epoch with a full budget. Record the
+   verdict as above and re-enter detection; do not start a round the detect line
+   did not name.
 
-Done when: a verdict is recorded. PASS moves toward `E`; FAIL with open gaps
-moves to `F`.
+Done when: a verdict is recorded, and a PASS is sealed. PASS moves toward `E`;
+FAIL with open gaps moves to `F`.
 
 #### Phase F - Fix
 
@@ -308,24 +337,28 @@ Done when: `gaps_open` is 0 and the fixes are committed.
 
 #### Phase E - Done
 
-Detection prints `phase=E` only after `validate_state.py` exits 0, so the
-verdict is already deterministic by the time this branch runs.
+Detection prints `phase=E` only after `validate_state.py` exits 0 **and** the
+recorded verdict still covers HEAD, so the verdict is already deterministic by
+the time this branch runs.
 
 1. Walk the Phase E section of [checklist.md](references/checklist.md).
-2. Record completion:
+2. Print the iteration summary with `phase_out = E`.
+3. Run the finalizer. It records completion, re-checks that nothing moved, and
+   prints the signature itself:
    ```bash
-   python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> \
-     --status complete --iteration-done --phase E --action "done"
+   python3 <skill-dir>/scripts/finish_loop.py <feature> --root <root>
    ```
-3. Print the iteration summary with `phase_out = E`.
-4. Print the done-signature **as the final line**:
-   ```
-   __TLC_LOOP__ feature=<feature> verify=PASS
-   ```
-5. Stop. `E` is the only successful terminal.
+   Exit 2 is a refusal naming what is wrong - a dirty tree, an unsealed report,
+   a HEAD the verdict does not cover. Repair the cause and re-enter detection;
+   do not print anything in its place.
+4. Stop. `E` is the only successful terminal.
 
-Done when: the checklist passes, the summary is printed, and the signature is
-the last line of output.
+**Never print the done-signature yourself.** It exists in exactly one script,
+and a line typed from memory is a success claim nothing checked - which is how
+a real run signed off a tree two commits past its only verdict.
+
+Done when: the checklist passes, the summary is printed, and `finish_loop.py`
+exited 0 with the signature as the last line of output.
 
 #### Phase H - Halt
 
@@ -393,6 +426,7 @@ halt a run live in `loop.json`, and only the agent writes them.
 | File | Contents |
 | --- | --- |
 | [phase-transitions.md](references/phase-transitions.md) | The `detect_phase.py` contract: vocabulary, derivation order, exit rules |
+| [verification-freshness.md](references/verification-freshness.md) | When a verdict covers HEAD: the seal, epochs, the finalizer, publishing |
 | [recovery-loop.md](references/recovery-loop.md) | Repair procedure, failure classifications, external-blocker test |
 | [executors.md](references/executors.md) | Payload format, evidence contract, the two universal executor rules |
 | [providers.md](references/providers.md) | Adapter table per provider |

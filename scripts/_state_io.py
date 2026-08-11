@@ -68,8 +68,8 @@ def new_state(feature, objective, harness):
         # written by nothing. A new run leaves it empty for good.
         "no_diff_tasks": [],
         "reconciled": [],
-        "verify": {"rounds": 0, "last_verdict": None, "last_report": None,
-                   "gaps_open": 0, "verified_at": None},
+        "verify": {"rounds": 0, "epoch_rounds": 0, "last_verdict": None,
+                   "last_report": None, "gaps_open": 0, "verified_at": None},
         "counters": {
             "started_at_ms": int(time.time() * 1000),
             "iterations_without_commit": 0,
@@ -102,6 +102,23 @@ def _validate(state, where):
     return state
 
 
+def _migrate(state):
+    """Supply fields added after this file's schema was first written.
+
+    `verify.epoch_rounds` bounds the current verification epoch, which is what
+    `verify.max_rounds` compares against. A file written before epochs existed
+    carries only the lifetime `rounds`; reading that as the epoch is the
+    conservative migration, because it leaves an in-flight run with exactly the
+    budget it already had instead of silently handing it a fresh one.
+
+    Migration is deterministic and read-side only: the same file always yields
+    the same state, and nothing is written back until a real mutation does it.
+    """
+    verify = state["verify"]
+    verify.setdefault("epoch_rounds", int(verify.get("rounds") or 0))
+    return state
+
+
 def load(feature, root):
     """Parse and schema-validate `loop.json`. Raises StateError on anything else."""
     path = state_path(feature, root)
@@ -112,7 +129,7 @@ def load(feature, root):
         raise StateError(f"{path}: no such file") from exc
     except json.JSONDecodeError as exc:
         raise StateError(f"{path}: malformed JSON: {exc}") from exc
-    return _validate(raw, path)
+    return _migrate(_validate(raw, path))
 
 
 def save(feature, root, state):

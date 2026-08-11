@@ -5,11 +5,18 @@ editing.
 
 ## The done-signature
 
-The loop prints this line, and only this line, once `validate_state.py` exits 0:
+One script prints this line, `scripts/finish_loop.py`, and nothing else in the
+skill contains it:
 
 ```
 __TLC_LOOP__ feature=<FEATURE> verify=PASS
 ```
+
+It prints only after re-deriving that the detector says `phase=E action=done`,
+the working tree is clean, and the recorded verdict still covers HEAD - then
+recording completion and checking all three again. Matching the line is
+therefore equivalent to trusting that check, which is the whole reason the
+condition below is allowed to be a string match.
 
 The feature name is part of the signature. Two features running in one
 transcript would otherwise satisfy each other's condition.
@@ -48,9 +55,14 @@ read files. It cannot run `validate_state.py`, cannot open `validation.md`, and
 cannot check `git log`, so a condition phrased as "`validate_state.py` exits 0"
 would never fire, whatever the repository actually looks like.
 
-So the loop moves the verdict into the transcript: the script decides, the loop
-prints the decision, the evaluator matches the printed line. The signature is
-not decoration, it is the entire interface.
+So the loop moves the verdict into the transcript: the script decides, the
+script prints the decision, the evaluator matches the printed line. The
+signature is not decoration, it is the entire interface.
+
+Which is why the printing is not a model's job. A run once printed it over a
+tree two commits past its only verdict, with the detector correctly reporting a
+halt at the time. An evaluator matching that line was matching a sentence, not a
+check. `finish_loop.py` exists so the two are the same thing again.
 
 The halt line is in the condition for the opposite reason. A halted run never
 prints the signature, so a condition matching only the signature would restart

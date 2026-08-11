@@ -78,17 +78,20 @@ T4 -> T5 -> T6
 **Gate**: quick
 """
 
-# Honours validate_state.py's contract: a report must exist and hold a filled
-# PASS verdict. Anything else is "not done".
+# Honours validate_state.py's contract: a report must exist, hold a filled PASS
+# verdict, and cite `file:line` evidence. Anything else is "not done". The
+# evidence pattern is the real one, copied from the sibling - a stub that
+# accepts prose would let `checkpoint.py --seal` certify an unevidenced report.
 VALIDATE_STATE_STUB = '''#!/usr/bin/env python3
-import os, sys
+import os, re, sys
 feature = sys.argv[1]
 root = sys.argv[sys.argv.index("--root") + 1] if "--root" in sys.argv else "."
 path = os.path.join(root, ".specs", "features", feature, "validation.md")
 if not os.path.exists(path):
     sys.exit(1)
 text = open(path, encoding="utf-8").read()
-sys.exit(0 if "PASS" in text and "FAIL" not in text else 1)
+ok = "PASS" in text and "FAIL" not in text
+sys.exit(0 if ok and re.search(r"[\\w./-]+\\.[A-Za-z0-9]+:\\d+", text) else 1)
 '''
 
 
@@ -175,6 +178,12 @@ class DetectPhaseCase(unittest.TestCase):
                 state[key].update(value)
             else:
                 state[key] = value
+        # A caller that sets `rounds` without `epoch_rounds` is describing a
+        # state written before epochs existed, so the key is dropped and the
+        # codec's migration is what supplies it. That keeps every pre-existing
+        # test in this file exercising the v1 read path on every run.
+        if "epoch_rounds" not in overrides.get("verify", {}):
+            state["verify"].pop("epoch_rounds", None)
         with open(self.state_path(), "w", encoding="utf-8") as fh:
             fh.write(json.dumps(state, indent=2, sort_keys=True) + "\n")
         return state
@@ -668,10 +677,13 @@ class StaleVerification(DetectPhaseCase):
         verified_at = self.head()
         self._passing_report()
         # A commit lands after the verification: same report, newer tree.
+        # Round 1, not 2: that commit closed the epoch the PASS belonged to, and
+        # the tree it produced has been verified zero times. See
+        # `VerificationEpochs` below.
         self.commit("docs: tweak", "notes.txt")
         self.write_state(verify={"rounds": 1, "last_verdict": "PASS",
                                  "verified_at": verified_at})
-        self.assertEqual(self.line(), "phase=V action=verify round=2")
+        self.assertEqual(self.line(), "phase=V action=verify round=1")
 
     def test_a_pass_covering_head_still_reaches_done(self):
         self.complete("T1", "T2", "T3", "T4", "T5", "T6")
@@ -687,6 +699,219 @@ class StaleVerification(DetectPhaseCase):
         self.complete("T1", "T2", "T3", "T4", "T5", "T6")
         self._passing_report()
         self.write_state()
+        self.assertEqual(self.line(), "phase=V action=verify round=1")
+
+
+REPORT_PATH = ".specs/features/demo/validation.md"
+
+
+class SealedVerification(DetectPhaseCase):
+    """Scenario 2: the report can be versioned without unverifying the code.
+
+    The verifier reads commit `V` and writes `validation.md`. Committing that
+    report moves HEAD past `V`, and a moved HEAD is uncovered - so the evidence
+    could never be versioned without invalidating the thing it is evidence of.
+
+    A seal is the one commit that keeps coverage: a direct child of `V`, whose
+    diff is exactly the canonical report, carrying trailers that name the commit
+    it certifies. Every seal here is written by hand with plain git, because
+    what is under test is the detector re-deriving those three facts rather than
+    believing a trailer.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.complete("T1", "T2", "T3", "T4", "T5", "T6")
+        self.verified_at = self.head()
+        self.write_validation("## Validation: demo - PASS\n\nEvidence: scripts/a.py:12\n")
+
+    def head(self):
+        return _git(self.root, "rev-parse", "HEAD").strip()
+
+    def passed(self, **overrides):
+        verify = {
+            "rounds": 1,
+            "epoch_rounds": 1,
+            "last_verdict": "PASS",
+            "gaps_open": 0,
+            "verified_at": self.verified_at,
+        }
+        verify.update(overrides)
+        self.write_state(verify=verify)
+
+    def seal(self, of=None, result="PASS", extra_file=None, paths=(REPORT_PATH,)):
+        if extra_file:
+            with open(os.path.join(self.root, extra_file), "w", encoding="utf-8") as fh:
+                fh.write("extra\n")
+        _git(self.root, "add", "--", *paths, *( [extra_file] if extra_file else [] ))
+        _git(
+            self.root,
+            "commit",
+            "-q",
+            "-m",
+            "docs(verify): seal the validation report",
+            "--trailer",
+            f"Verification-Of: {of or self.verified_at}",
+            "--trailer",
+            f"Verification-Result: {result}",
+        )
+
+    def test_a_valid_seal_keeps_the_feature_done(self):
+        self.passed()
+        self.seal()
+        self.assertEqual(self.line(), "phase=E action=done")
+
+    def test_a_seal_naming_a_different_commit_does_not_cover(self):
+        self.passed()
+        self.seal(of=self.verified_at[::-1])
+        self.assertEqual(self.line(), "phase=V action=verify round=1")
+
+    def test_a_seal_recording_a_fail_does_not_cover(self):
+        self.passed()
+        self.seal(result="FAIL")
+        self.assertEqual(self.line(), "phase=V action=verify round=1")
+
+    def test_a_seal_carrying_a_second_file_does_not_cover(self):
+        self.passed()
+        self.seal(extra_file="sneaked.txt")
+        self.assertEqual(self.line(), "phase=V action=verify round=1")
+
+    def test_a_commit_after_the_seal_does_not_cover(self):
+        # Coverage is a direct child of `verified_at`. A chain of seals would
+        # let any number of commits ride behind one verdict.
+        self.passed()
+        self.seal()
+        self.commit("docs: tweak", "notes.txt")
+        self.assertEqual(self.line(), "phase=V action=verify round=1")
+
+    def test_a_plain_commit_of_the_report_does_not_cover(self):
+        # Same file, same parent, no trailers: the loop cannot tell it from any
+        # other commit, so it does not get the exception.
+        self.passed()
+        _git(self.root, "add", "--", REPORT_PATH)
+        _git(self.root, "commit", "-q", "-m", "docs: record the validation report")
+        self.assertEqual(self.line(), "phase=V action=verify round=1")
+
+
+class VerificationEpochs(DetectPhaseCase):
+    """Scenarios 4 and 5: `max_rounds` bounds a fix cycle, not a lifetime.
+
+    The real run spent its three rounds and passed on the third. Then commits
+    landed, which correctly reopened verification - and the ceiling, counting
+    every round the run had ever done, refused to authorise the round it had
+    just asked for. The loop was left with a stale PASS it could not refresh and
+    a halt reason that said no PASS had ever happened.
+
+    An epoch is the sequence of rounds against one lineage. A PASS closes it; a
+    commit landing after that PASS opens the next one, and the next one starts
+    with a full budget. Nothing else about the ceiling changes: a FAIL, a fix,
+    and a re-verify all stay in the same epoch and all still spend from it.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.complete("T1", "T2", "T3", "T4", "T5", "T6")
+        self.write_validation("## Validation: demo - PASS\n\nEvidence: scripts/a.py:12\n")
+        self.write_config("[verify]\nmax_rounds = 3\n")
+
+    def head(self):
+        return _git(self.root, "rev-parse", "HEAD").strip()
+
+    def failing_report(self):
+        """A report the sibling validator rejects, so the run is not done.
+
+        `detect_phase.py` asks the validator about the report, not `loop.json`
+        about the verdict. A FAIL state carrying a PASS report on disk would be
+        answered E, which is correct and is not what these tests are about.
+        """
+        self.write_validation("## Validation: demo - FAIL\n\nEvidence: scripts/a.py:12\n")
+
+    def spent_epoch(self, **overrides):
+        """Three rounds spent in this epoch, the last one a FAIL."""
+        self.failing_report()
+        verify = {
+            "rounds": 3,
+            "epoch_rounds": 3,
+            "last_verdict": "FAIL",
+            "gaps_open": 0,
+            "verified_at": self.head(),
+        }
+        verify.update(overrides)
+        self.write_state(verify=verify)
+
+    def spent_pass(self, **overrides):
+        """The incident's state: three rounds spent, the third one a PASS."""
+        verify = {
+            "rounds": 3,
+            "epoch_rounds": 3,
+            "last_verdict": "PASS",
+            "gaps_open": 0,
+            "verified_at": self.head(),
+        }
+        verify.update(overrides)
+        self.write_state(verify=verify)
+
+    def test_a_pass_on_the_last_round_with_an_unchanged_head_is_done(self):
+        # Scenario 1. Already true before epochs existed; kept because it is
+        # the property every change here must not break.
+        self.spent_pass()
+        self.assertEqual(self.line(), "phase=E action=done")
+
+    def test_a_commit_after_the_pass_opens_a_new_epoch(self):
+        self.spent_pass()
+        self.commit("feat: land more runtime code", "src.py")
+        self.assertEqual(self.line(), "phase=V action=verify round=1")
+
+    def test_that_commit_never_reaches_done(self):
+        # Scenario 4: a runtime commit after a PASS is unverified code. It is
+        # not done, whatever the state says.
+        self.spent_pass()
+        self.commit("feat: land more runtime code", "src.py")
+        self.assertNotIn("phase=E", self.line())
+
+    def test_the_old_epoch_does_not_exhaust_the_new_one(self):
+        # Scenario 5, and the line the real run got stuck on.
+        self.spent_pass()
+        self.commit("feat: land more runtime code", "src.py")
+        self.assertNotIn("verify_exhausted", self.line())
+
+    def test_a_fail_cycle_still_spends_the_budget(self):
+        # The ceiling exists for exactly this: FAIL, fix, re-verify, repeat.
+        # A fix commit is not a new epoch, so the third round still exhausts it.
+        self.spent_epoch()
+        self.assertIn("reason=verify_exhausted", self.line())
+
+    def test_a_commit_after_a_fail_does_not_open_an_epoch(self):
+        self.spent_epoch()
+        self.commit("fix: repair the gap", "fix.py")
+        self.assertIn("reason=verify_exhausted", self.line())
+
+    def test_the_halt_detail_no_longer_claims_no_pass_ever_happened(self):
+        # The old wording said "3 verify round(s) without a PASS" in a run that
+        # had a real PASS on record. It is scoped to the epoch now.
+        self.spent_epoch()
+        self.assertIn("epoch", self.line())
+
+    def test_a_new_epoch_counts_its_own_rounds(self):
+        self.spent_pass()
+        self.commit("feat: land more runtime code", "src.py")
+        self.spent_epoch(rounds=4, epoch_rounds=1)
+        self.assertEqual(self.line(), "phase=V action=verify round=2")
+
+    def test_a_state_written_before_epochs_reads_its_rounds_as_the_epoch(self):
+        # Scenario 13. `epoch_rounds` absent is a v1 file. Reading it as the
+        # lifetime total is the conservative migration: an in-flight run keeps
+        # exactly the budget it had, instead of silently gaining three rounds.
+        self.failing_report()
+        self.write_state(verify={"rounds": 3, "last_verdict": "FAIL", "gaps_open": 0})
+        self.assertIn("reason=verify_exhausted", self.line())
+
+    def test_a_v1_state_still_reopens_after_a_stale_pass(self):
+        self.write_state(
+            verify={"rounds": 3, "last_verdict": "PASS", "gaps_open": 0,
+                    "verified_at": self.head()}
+        )
+        self.commit("feat: land more runtime code", "src.py")
         self.assertEqual(self.line(), "phase=V action=verify round=1")
 
 

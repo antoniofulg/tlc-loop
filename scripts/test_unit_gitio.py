@@ -169,6 +169,70 @@ class HeadCommit(unittest.TestCase):
             self.assertIsNone(_gitio.head_commit(root))
 
 
+class DirtyPaths(unittest.TestCase):
+    """What counts as a working-tree change when a seal or a finish asks.
+
+    The parsing is the fiddly half - porcelain reports renames as two paths and
+    quotes anything unusual - and the exclusion is the load-bearing half: the
+    loop's own `loop.json` is machine state and must not be able to block a
+    finish in a project that never added the `.gitignore` rule.
+    """
+
+    def test_a_clean_tree_reports_nothing(self):
+        with tempfile.TemporaryDirectory() as root:
+            _init(root)
+            _commit(root, "seed.txt", "chore: seed")
+            self.assertEqual(_gitio.dirty_paths(root, "demo"), set())
+
+    def test_an_untracked_file_is_reported(self):
+        with tempfile.TemporaryDirectory() as root:
+            _init(root)
+            _commit(root, "seed.txt", "chore: seed")
+            with open(os.path.join(root, "new.txt"), "w", encoding="utf-8") as fh:
+                fh.write("new\n")
+            self.assertEqual(_gitio.dirty_paths(root, "demo"), {"new.txt"})
+
+    def test_a_staged_file_is_reported(self):
+        with tempfile.TemporaryDirectory() as root:
+            _init(root)
+            _commit(root, "seed.txt", "chore: seed")
+            with open(os.path.join(root, "new.txt"), "w", encoding="utf-8") as fh:
+                fh.write("new\n")
+            _git(root, "add", "-A")
+            self.assertEqual(_gitio.dirty_paths(root, "demo"), {"new.txt"})
+
+    def test_a_rename_reports_the_destination(self):
+        with tempfile.TemporaryDirectory() as root:
+            _init(root)
+            _commit(root, "before.txt", "chore: seed")
+            _git(root, "mv", "before.txt", "after.txt")
+            self.assertEqual(_gitio.dirty_paths(root, "demo"), {"after.txt"})
+
+    def test_the_loops_own_state_file_is_excluded(self):
+        with tempfile.TemporaryDirectory() as root:
+            _init(root)
+            _commit(root, "seed.txt", "chore: seed")
+            os.makedirs(os.path.join(root, ".specs", "features", "demo"))
+            with open(
+                os.path.join(root, ".specs/features/demo/loop.json"), "w", encoding="utf-8"
+            ) as fh:
+                fh.write("{}\n")
+            self.assertEqual(_gitio.dirty_paths(root, "demo"), set())
+
+    def test_another_features_state_file_is_not_excluded(self):
+        with tempfile.TemporaryDirectory() as root:
+            _init(root)
+            _commit(root, "seed.txt", "chore: seed")
+            os.makedirs(os.path.join(root, ".specs", "features", "other"))
+            with open(
+                os.path.join(root, ".specs/features/other/loop.json"), "w", encoding="utf-8"
+            ) as fh:
+                fh.write("{}\n")
+            self.assertEqual(
+                _gitio.dirty_paths(root, "demo"), {".specs/features/other/loop.json"}
+            )
+
+
 class TrailerArgs(unittest.TestCase):
     def test_composes_task_and_gate_trailers(self):
         self.assertEqual(
