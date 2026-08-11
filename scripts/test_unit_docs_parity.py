@@ -380,10 +380,10 @@ def assert_instructs(case, scope, command, where, fenced=True):
         f"{where} does not carry {command!r}"
         + (" as a fenced call; a mention in prose is not an instruction" if fenced else ""),
     )
-    marker = negated_by(scope, command)
+    marker = negated_by(scope, command, fenced=fenced)
     case.assertIsNone(
         marker,
-        f"{where} carries {command!r} but the clause introducing it says "
+        f"{where} carries {command!r} but the prose introducing it says "
         f"{marker!r}, so it reads as a warning rather than an instruction",
     )
 
@@ -555,12 +555,106 @@ class ANegatedCommandIsNotAnInstruction(unittest.TestCase):
         )
         self.assertIsNone(negated_by(rescued, self.COMMAND))
 
-    def test_the_vocabulary_is_verb_specific(self):
-        # A bare negation word would fail valid prose; every entry has to end
-        # in the verb it forbids, which is what keeps "not a flake" harmless.
-        for marker in NEGATED_IMPERATIVES:
-            self.assertIn(marker.split()[-1], IMPERATIVE_VERBS, marker)
-            self.assertGreater(len(marker.split()), 1, marker)
+    #: Written out rather than derived from NEGATED_IMPERATIVES. A loop over
+    #: the tuple shrinks with it, so dropping four of the five verbs left the
+    #: test green over a vocabulary that no longer covered them.
+    SPELLED_OUT = (
+        "never run", "never call", "never invoke", "never use", "never pass",
+        "do not run", "do not call", "do not invoke", "do not use", "do not pass",
+        "don't run", "don't call", "don't invoke", "don't use", "don't pass",
+    )
+
+    def test_every_spelled_out_marker_is_detected(self):
+        for marker in self.SPELLED_OUT:
+            doc = f"## s\n\ntext\n\nYou should {marker} this:\n```bash\nthing --flag\n```\n"
+            self.assertEqual(negated_by(doc, "thing --flag"), marker, marker)
+
+    def test_the_spelled_out_list_and_the_vocabulary_agree(self):
+        # Either side growing without the other is the drift this catches.
+        self.assertEqual(sorted(self.SPELLED_OUT), sorted(NEGATED_IMPERATIVES))
+
+    def test_a_negation_wrapped_over_several_lines_is_still_read(self):
+        # Pins INTRO_LINES: an introducing sentence wraps, and the marker can
+        # land on its first line. A shorter window silently stops seeing it.
+        doc = (
+            "## s\n"
+            "Never run the command below under any circumstances. It was\n"
+            "withdrawn because it corrupted the state file, and the\n"
+            "replacement is documented in the section above. For the\n"
+            "record, this is what it used to look like:\n"
+            "```bash\nthing --flag\n```\n"
+        )
+        # The marker sits exactly INTRO_LINES above the fence, so a shorter
+        # window stops seeing it and this fails.
+        self.assertEqual(negated_by(doc, "thing --flag"), "never run")
+
+    def test_a_bare_negation_list_would_flag_shipped_prose(self):
+        # The measurement behind the vocabulary's shape, kept executable. If
+        # this stops finding anything, the verb-specific list is doing no work
+        # and the simpler one would have been fine.
+        bare = ("never", "do not", "don't", "rather than")
+        flagged = []
+        for relative, text in markdown_documents():
+            lines = visible(text).splitlines()
+            for opening, _ in fence_spans(lines):
+                intro = " ".join(lines[max(0, opening - INTRO_LINES):opening]).lower()
+                if any(word in intro for word in bare):
+                    flagged.append(relative)
+        self.assertTrue(
+            flagged,
+            "no shipped fence is introduced by a bare negation word, so the "
+            "verb-specific vocabulary is guarding against nothing",
+        )
+
+    def test_a_negation_directly_above_a_one_line_command_is_caught(self):
+        # The lookbehind used to be anchored to where the scan started matching
+        # rather than to the command, so an intro on the line above the fence
+        # fell outside its own window.
+        doc = "## s\n\ntext\n\nNever run this:\n```bash\nthing --flag\n```\n"
+        self.assertEqual(negated_by(doc, "thing --flag"), "never run")
+
+    def test_a_negated_inline_mention_is_caught(self):
+        # The H transition row is one line, so there is nothing above it to
+        # read; the negation sits before the command in the same cell.
+        row = "| `H` | Terminal. Whatever you do, never run `update_loop.py --resume`. |"
+        self.assertEqual(negated_by(row, "update_loop.py --resume", fenced=False), "never run")
+
+    def test_an_affirmative_inline_mention_passes(self):
+        row = "| `H` | Terminal. A human resolves the cause, then runs `update_loop.py --resume`. |"
+        self.assertIsNone(negated_by(row, "update_loop.py --resume", fenced=False))
+
+    def test_the_guard_itself_rejects_a_negated_inline_row(self):
+        # Through assert_instructs rather than negated_by directly. Calling the
+        # helper straight left the guard's own `fenced` plumbing untested, and
+        # forcing it to True there silently revives the dead-check bug: a row
+        # has no fence, so a fenced-only scan finds nothing to judge.
+        row = "| `H` | Terminal. Whatever you do, never run `update_loop.py --resume`. |"
+        with self.assertRaises(AssertionError):
+            assert_instructs(
+                self, row, "update_loop.py --resume", "the H transition row", fenced=False
+            )
+
+    def test_the_guard_itself_rejects_a_negated_fence(self):
+        # The fenced mirror of the row case above. Forcing `fenced` False here
+        # makes the scan read the affirmative prose mention instead of the
+        # block it is meant to judge, which is gap 5 coming back.
+        doc = ("## s\n\nrun `thing --flag` to proceed\n\ntext\n\n"
+               "Never run this:\n```bash\nthing --flag\n```\n")
+        with self.assertRaises(AssertionError):
+            assert_instructs(self, doc, "thing --flag", "the fake section")
+
+    def test_the_guard_itself_accepts_an_affirmative_inline_row(self):
+        row = "| `H` | Terminal. A human resolves the cause, then runs `update_loop.py --resume`. |"
+        assert_instructs(
+            self, row, "update_loop.py --resume", "the H transition row", fenced=False
+        )
+
+    def test_prose_cannot_rescue_a_negated_fence(self):
+        # `fenced=True` ignores mentions outside a block, so an affirmative
+        # sentence elsewhere in the scope does not answer for a warned-off call.
+        doc = ("## s\n\nrun `thing --flag` to proceed\n\ntext\n\n"
+               "Never run this:\n```bash\nthing --flag\n```\n")
+        self.assertEqual(negated_by(doc, "thing --flag"), "never run")
 
     def test_the_vocabulary_flags_no_fence_in_any_shipped_document(self):
         # The guard against a later addition quietly breaking valid prose.
@@ -659,7 +753,7 @@ class AFencedHashIsCodeNotStructure(unittest.TestCase):
         edited = skill.replace(
             "   python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> \\\n"
             "     --resume",
-            "   # resolve the cause first\n"
+            "# resolve the cause first\n"
             "   python3 <skill-dir>/scripts/update_loop.py <feature> --root <root> \\\n"
             "     --resume",
         )
@@ -733,12 +827,13 @@ def section(text, heading, where):
     return "".join(lines[start:end])
 
 
-#: Negated imperatives that turn a fenced call into a warning about it. The
-#: list is verb-specific on purpose, and that is measured rather than assumed:
-#: `rather than` introduces three fences affirmatively, and `SKILL.md` step 1 of
-#: Phase B introduces a correct `--halt executor` call with "do not retry - a
-#: timeout is an executor failure, not a flake:". A list of bare negation words
-#: would fail four valid documents the day it shipped.
+#: Negated imperatives that turn a call into a warning about it. The list is
+#: verb-specific, and that is measured rather than assumed: a list of bare
+#: negation words flags shipped fences that are perfectly affirmative -
+#: `rather than` introduces three of them, and Phase B step 1 reaches a correct
+#: `--halt executor` call through "do not retry - a timeout is an executor
+#: failure, not a flake:". `test_a_bare_negation_list_would_flag_shipped_prose`
+#: keeps that measurement executable instead of leaving it as a claim.
 #:
 #: This narrows the hole; it does not close it. A negation phrased outside the
 #: list ("this call was removed in 0.4:") still reads as an instruction to the
@@ -752,25 +847,64 @@ NEGATED_IMPERATIVES = tuple(
     for verb in IMPERATIVE_VERBS
 )
 
+#: How many lines above a fence count as the prose introducing it.
+INTRO_LINES = 4
 
-def negated_by(text, command):
+
+def fence_spans(lines):
+    """`(opening, closing)` line index for every fenced block.
+
+    An unterminated fence runs to the end, which is what `_fenced()` already
+    assumes and what a renderer does with it.
+    """
+    spans, opening = [], None
+    for number, line in enumerate(lines):
+        if not line.lstrip().startswith("```"):
+            continue
+        if opening is None:
+            opening = number
+        else:
+            spans.append((opening, number))
+            opening = None
+    if opening is not None:
+        spans.append((opening, len(lines)))
+    return spans
+
+
+def negated_by(text, command, fenced=True):
     """The negated imperative introducing `command`, or None.
 
-    Only the clause after the final `". "` before the occurrence is read. A
-    wider window flags the Phase B timeout instruction, which says "do not
-    retry" about something else on its way to a call the reader must make.
+    The lookbehind is anchored to the command's own position - the lines above
+    its fence, or the text before it on its own line - not to wherever a scan
+    happened to start matching. Anchoring it to the scan instead let a negation
+    sitting directly above a one-line command fall outside its own lookbehind.
 
-    One affirmative occurrence is enough: a section that warns against a call
-    in one place and gives it in another still documents the supported route,
-    so this returns None as soon as it finds one that nothing negates.
+    `fenced` selects which occurrences count, mirroring the guard: a criterion
+    naming a fenced call must not be rescued by an affirmative mention in
+    prose, and one naming an inline mention has no fence to read.
+
+    One affirmative occurrence is enough. A section that warns against a call
+    in one place and gives it in another still documents the supported route.
     """
     found = None
     lines = text.splitlines()
-    for number, _ in enumerate(lines):
-        if command not in collapsed(" ".join(lines[number:number + 3])):
+    if fenced:
+        places = [
+            (" ".join(lines[max(0, opening - INTRO_LINES):opening]),
+             " ".join(lines[opening + 1:closing]))
+            for opening, closing in fence_spans(lines)
+        ]
+    else:
+        inside = _fenced(lines)
+        places = [
+            (line.split(command, 1)[0], line)
+            for number, line in enumerate(lines)
+            if number not in inside and command in line
+        ]
+    for intro, body in places:
+        if command not in collapsed(body):
             continue
-        clause = " ".join(lines[max(0, number - 4):number]).lower().rsplit(". ", 1)[-1]
-        marker = next((m for m in NEGATED_IMPERATIVES if m in clause), None)
+        marker = next((m for m in NEGATED_IMPERATIVES if m in intro.lower()), None)
         if marker is None:
             return None
         found = found or marker

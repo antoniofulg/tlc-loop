@@ -158,6 +158,36 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: scripts/test_unit_docs_parity.py:389 (mutants P5, P6) (docs-parity)
 - last seen: 2026-08-11T14:25:09Z
 
+### L-025 - Anchor a lookbehind scan window to the matched token's own line, not to the enclosing scan window's start.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `docs-parity` · harmful: 0
+- features: parity-intent
+- evidence: P1 AC 4 / sensor A7 / scripts/test_unit_docs_parity.py:772 (docs-parity)
+- last seen: 2026-08-11T16:14:11Z
+
+### L-026 - Prove a reused check can still fire on the narrowest scope it is applied to, not only on the widest.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `docs-parity` · harmful: 0
+- features: parity-intent
+- evidence: P1 AC 7 / sensor A8 / scripts/test_unit_docs_parity.py:383 (docs-parity)
+- last seen: 2026-08-11T16:14:11Z
+
+### L-027 - Back a scan-window or scope choice with a fixture whose verdict changes when the window changes.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `docs-parity` · harmful: 0
+- features: parity-intent
+- evidence: mutant H8 / scripts/test_unit_docs_parity.py:535 (docs-parity)
+- last seen: 2026-08-11T16:14:11Z
+
+### L-028 - Never assert a property that the constant's own construction guarantees; the test cannot fail.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `testing` · harmful: 0
+- features: parity-intent
+- evidence: mutant H10 / scripts/test_unit_docs_parity.py:558 (testing)
+- last seen: 2026-08-11T16:14:11Z
+
+### L-029 - Replay a regression probe with the exact input that originally failed, not a weakened variant.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `testing` · harmful: 0
+- features: parity-intent
+- evidence: P2 AC 3 / scripts/test_unit_docs_parity.py:662 (testing)
+- last seen: 2026-08-11T16:14:11Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

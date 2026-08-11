@@ -43,9 +43,9 @@ thing the feature exists to prevent, and the suite reports PASS.
 | Assumption / decision | Chosen default | Rationale | Confirmed? |
 | --------------------- | -------------- | --------- | ---------- |
 | How negation is detected | A fixed vocabulary of negated imperatives (`never run`, `do not call`, `don't use`, ...), matched against the last clause before the fence | The user chose an explicit vocabulary. Verified against the shipped corpus: 0 false positives, and it flags both P1 and P1b. | y |
-| Vocabulary is verb-specific, not bare negation words | Yes | Measured, not assumed. `rather than` introduces 3 fences affirmatively, and `SKILL.md:237` introduces a correct `--halt executor` instruction with "do not retry - a timeout is an executor failure, not a flake:". A bare-word list would fail 4 valid documents on day one. | y |
+| Vocabulary is verb-specific, not bare negation words | Yes | Measured, not assumed. `rather than` introduces 3 fences affirmatively, and `SKILL.md:237` reaches a correct `--halt executor` instruction through "do not retry - a timeout is an executor failure, not a flake:". A bare-word list would fail valid documents on day one, and `test_a_bare_negation_list_would_flag_shipped_prose` keeps that measurement executable. This vocabulary is the *only* thing preventing those false positives; the lookbehind window does not help with it. | y |
 | Residual risk of the vocabulary | Accepted and recorded | A negation phrased outside the list ("this call was removed in 0.4:") still passes. The guard narrows the hole; it does not close it. Stated in the test docstring so the next reader is not misled. | y |
-| Scope of the negation scan | The last clause before the fence, split on `". "` | A 3-line window flags `SKILL.md:237`, which is a correct instruction. The clause that ends in the colon is the one that introduces the command. | y |
+| Scope of the negation scan | The `INTRO_LINES` lines above the command's own fence opener, or the same-line text before an inline mention | **Corrected after verification.** The original rationale - that a line window flags `SKILL.md:237` - was false: that line says "do not retry", and `retry` is not an imperative verb in the vocabulary, so no window could ever flag it. The clause split protected nothing and its test could not fail. What the anchor actually fixes is real: anchored to the scan instead of the command, a negation directly above a one-line command fell outside its own lookbehind. | y |
 | Which guards get the fence requirement | The three whose artifact is a fenced block | The `H` transition row is an inline mention inside a table cell (`references/phase-transitions.md:252`), so requiring a fence there would fail a correct document. It gets comment-stripping and negation only. | y |
 | Whether HTML comments are stripped or flagged | Stripped before scanning | A commented-out instruction is not an instruction. Stripping gives the guard the reader's view. `assets/iteration-summary.template.md` uses comments legitimately, so flagging them would be wrong. | y |
 
@@ -70,7 +70,7 @@ demonstrated drifts leave it green, and one of them inverts the instruction.
 2. IF the only occurrence of a required command lies inside an HTML comment THEN the guard SHALL fail, naming the document.
 3. WHILE a guard asserts a command whose artifact is a fenced block, WHEN the command appears only in prose outside any fence THEN the guard SHALL fail, naming the document.
 4. IF the last clause before a required command's fence contains a negated imperative from the recorded vocabulary THEN the guard SHALL fail, naming the marker it matched.
-5. WHEN the negation scan reads the prose introducing a fence THEN it SHALL consider only the clause after the final `". "`, so an earlier sentence's wording cannot flag a correct instruction.
+5. WHEN the negation scan reads the prose introducing a command THEN it SHALL anchor the lookbehind to that command's own fence opener, or to the text preceding it on its own line where the criterion names an inline mention.
 6. The negation vocabulary SHALL contain only verb-specific negated imperatives, and SHALL flag none of the fences in the shipped documents.
 7. WHERE a guard asserts an inline mention rather than a fenced block, it SHALL apply criteria 1, 2 and 4 and SHALL NOT require a fence.
 
@@ -108,6 +108,9 @@ block and confirm the Phase H guard still passes and still stops at `### Step 3`
 - IF a document contains no fenced block at all THEN a guard requiring a fenced command SHALL fail rather than raise, and the failure SHALL name the document.
 - WHEN a fence is introduced by a clause containing a negated imperative *and* the same section carries a second, affirmative instance of the command THEN the guard SHALL pass, because a supported route is documented.
 - WHEN the negation vocabulary is checked against every fence in the shipped documents THEN it SHALL match none, and a test SHALL assert this so a later addition to the vocabulary cannot silently break valid prose.
+- WHILE a guard names a fenced artifact, WHEN an affirmative mention of the command appears in prose outside any fence THEN it SHALL NOT rescue a fenced occurrence its own prose negates.
+- WHEN a negated imperative introduces a command from up to `INTRO_LINES` lines above its fence THEN the scan SHALL still read it, so a wrapped introducing sentence is not missed.
+- IF a criterion names an inline mention THEN the negation SHALL be read from the text before the command on the same line, because a table row has no lines above it to read.
 
 ---
 
