@@ -287,6 +287,26 @@ def read_shipped(relative_path):
         return handle.read()
 
 
+def visible(text):
+    """`text` as a reader sees it: every HTML comment removed.
+
+    A commented-out instruction is not an instruction. A guard asserting that a
+    document tells someone to run a command has to read what the document
+    shows, or commenting the block out leaves the guard green over prose that
+    no longer instructs anyone.
+
+    An unterminated `<!--` hides the rest of the document, which is what a
+    renderer does with it. The guard should not be the one reader that still
+    counts the tail.
+    """
+    return re.sub(r"<!--.*?(?:-->|\Z)", "", text, flags=re.DOTALL)
+
+
+def read_visible(relative_path):
+    """One shipped document with its HTML comments removed."""
+    return visible(read_shipped(relative_path))
+
+
 class StageRoutingContractParity(unittest.TestCase):
     """Public docs preserve the handoff and runtime routing vocabulary."""
 
@@ -382,7 +402,7 @@ class ClearingAHaltHasOneSupportedRoute(unittest.TestCase):
 
     def test_the_transition_row_names_the_command(self):
         row = table_row(
-            read_shipped("references/phase-transitions.md"),
+            read_visible("references/phase-transitions.md"),
             "| `H` |",
             "references/phase-transitions.md",
         )
@@ -395,7 +415,7 @@ class ClearingAHaltHasOneSupportedRoute(unittest.TestCase):
 
     def test_the_halt_field_section_names_the_command(self):
         body = section(
-            read_shipped("references/state-schema.md"), "## `halt`", "references/state-schema.md"
+            read_visible("references/state-schema.md"), "## `halt`", "references/state-schema.md"
         )
         self.assertIn(
             "update_loop.py <feature> --root <root> --resume",
@@ -404,13 +424,32 @@ class ClearingAHaltHasOneSupportedRoute(unittest.TestCase):
         )
 
     def test_the_halt_phase_names_the_command(self):
-        body = section(read_shipped("SKILL.md"), "#### Phase H - Halt", "SKILL.md")
+        body = section(read_visible("SKILL.md"), "#### Phase H - Halt", "SKILL.md")
         self.assertIn(
             "update_loop.py <feature> --root <root> --resume",
             collapsed(body),
             "Phase H does not carry the command a human runs to lift the halt "
             "it just recorded; naming the flag in passing is not the same thing",
         )
+
+    def test_a_commented_out_block_does_not_count_as_documentation(self):
+        # Probe P2 from the halt-resume verifier: wrapping the block in an HTML
+        # comment left every guard green over prose that instructs nobody.
+        schema = read_shipped("references/state-schema.md")
+        body = section(schema, "## `halt`", "references/state-schema.md")
+        block = body[body.index("It is cleared by one command"):]
+        commented = schema.replace(block, f"<!--\n{block}\n-->")
+        scoped = section(visible(commented), "## `halt`", "references/state-schema.md")
+        self.assertNotIn("update_loop.py <feature> --root <root> --resume", collapsed(scoped))
+
+    def test_a_live_instance_survives_a_commented_out_copy(self):
+        # Commenting out a duplicate is housekeeping, not a regression.
+        schema = read_shipped("references/state-schema.md")
+        body = section(schema, "## `halt`", "references/state-schema.md")
+        block = body[body.index("It is cleared by one command"):]
+        doubled = schema.replace(block, f"<!--\n{block}\n-->\n{block}", 1)
+        scoped = section(visible(doubled), "## `halt`", "references/state-schema.md")
+        self.assertIn("update_loop.py <feature> --root <root> --resume", collapsed(scoped))
 
     def test_each_scope_excludes_the_passage_that_follows_it(self):
         # The check that makes the three above mean anything: a scan running to
@@ -429,6 +468,33 @@ class ClearingAHaltHasOneSupportedRoute(unittest.TestCase):
         decoyed = transitions.replace("| `H` |", "| `H` | a decoy |\n| `H` |", 1)
         with self.assertRaises(AssertionError):
             table_row(decoyed, "| `H` |", "references/phase-transitions.md")
+
+
+class HtmlCommentsAreNotDocumentation(unittest.TestCase):
+    """INTENT-01: the guards read what the document shows, not what it holds."""
+
+    def test_a_single_line_comment_is_removed(self):
+        self.assertEqual(visible("keep <!-- drop --> keep"), "keep  keep")
+
+    def test_a_comment_spanning_lines_is_removed(self):
+        self.assertEqual(visible("a\n<!-- one\ntwo\nthree -->\nb"), "a\n\nb")
+
+    def test_an_unterminated_comment_hides_the_rest(self):
+        # What a renderer does with it. A guard that kept reading would be the
+        # one reader still counting text nobody sees.
+        self.assertEqual(visible("shown\n<!-- swallowed\nalso swallowed"), "shown\n")
+
+    def test_text_with_no_comment_is_returned_unchanged(self):
+        text = read_shipped("references/recovery-loop.md")
+        self.assertEqual(visible(text), text)
+
+    def test_the_legitimate_template_keeps_its_content(self):
+        # `assets/iteration-summary.template.md` annotates fields with HTML
+        # comments on purpose. Stripping them must leave the fields.
+        stripped = visible(read_shipped("assets/iteration-summary.template.md"))
+        self.assertIn("{{ outcome }}", stripped)
+        self.assertIn("{{ gate_level }}", stripped)
+        self.assertNotIn("<!--", stripped)
 
 
 def section(text, heading, where):
@@ -496,7 +562,7 @@ class GateAttemptHasADocumentedWriter(unittest.TestCase):
         )
 
     def test_the_call_sits_in_the_phase_that_runs_the_gate(self):
-        body = section(read_shipped("SKILL.md"), "#### Phase B - Execute one batch", "SKILL.md")
+        body = section(read_visible("SKILL.md"), "#### Phase B - Execute one batch", "SKILL.md")
         self.assertIn(
             "update_loop.py <feature> --root <root> --gate-attempt",
             collapsed(body),
