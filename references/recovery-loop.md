@@ -14,6 +14,12 @@ action: no iteration is closed, no checkpoint is made, no counter moves. The
 loop advances on evidence, and a failure is evidence that the phase is not
 finished yet.
 
+**One counter is the exception: a failed gate.** Phase B records it with
+`update_loop.py --gate-attempt <TN>` on the failing attempt, before the repair
+below starts. It is what `limits.gate_attempts_per_task` bounds, so leaving it
+unwritten does not keep the run clean - it removes the only thing that stops a
+wrong diagnosis from being repaired forever.
+
 `status = blocked` is reserved for an external blocker proven by the
 three-criteria test at the bottom of this file. Nothing else earns it.
 
@@ -23,7 +29,10 @@ three-criteria test at the bottom of this file. Nothing else earns it.
 
 1. **Capture.** Record the exact command, its exit status, the decisive lines
    of output, and every file the output names. Change nothing yet. `loop.json`
-   stays untouched: an intermediate failure never calls `update_loop.py`.
+   stays untouched: an intermediate failure never calls `update_loop.py`, with
+   the single exception named above - a failed gate is recorded with
+   `--gate-attempt <TN>` before this step, because the attempt is what the
+   limit counts.
 2. **Diagnose the root cause.** Read the failing tool's own message and the
    project's instructions before editing anything. When the output names a safe,
    in-scope repair command, run it rather than describing it.
@@ -92,7 +101,7 @@ table names the level, never a specific build tool.
 | `resolve_stage.py` exits 2 - unknown provider, unsupported effort, unfilled placeholder | The loop cannot repair this: `loop.config.toml` is user-owned and read-only to the loop. Halt with `phase=H reason=executor` and the resolver's message as detail, so the user edits the config and resumes. |
 | An executor CLI is missing, unauthenticated, or out of quota | Halt with `phase=H reason=executor`, naming the command. No amount of retrying renews a token. |
 | An executor exceeds `limits.executor_timeout_seconds` | Kill it, keep the partial output for diagnosis, halt with `phase=H reason=executor`. A timeout is an executor failure, not a retry condition. |
-| The same task's gate keeps failing past `limits.gate_attempts_per_task` | Halt with `phase=H reason=gate_stuck`, naming the task. Repeated repair on one task is a signal that the diagnosis is wrong. |
+| The same task's gate keeps failing past `limits.gate_attempts_per_task` | Nothing to record by hand: each failed attempt already moved `--gate-attempt`, so detection derives `phase=H reason=gate_stuck` and names the task itself. Repeated repair on one task is a signal that the diagnosis is wrong. |
 | Uncommitted changes map to no current task | Halt with `phase=H reason=blocker`. Never commit them into someone else's task, and never discard them. |
 | A push, deploy, migration, or other remote or destructive step is required | Halt with `phase=H reason=blast_radius` and wait. See below. |
 

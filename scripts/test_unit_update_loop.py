@@ -531,6 +531,215 @@ class HaltRecording(unittest.TestCase):
             self.assertEqual(_read(root)["status"], "blocked")
 
 
+def _bytes(root):
+    """The state file verbatim, so a refusal can be proven to have written nothing."""
+    with open(_state_io.state_path(FEATURE, root), "rb") as fh:
+        return fh.read()
+
+
+HALTED = {"halt": {"reason": "gate_stuck", "detail": "T1 exceeded its gate budget"},
+          "status": "halted"}
+
+
+class ResumeLiftsARecordedHalt(unittest.TestCase):
+    """RESUME-01: `--resume` is the supported inverse of `--halt`.
+
+    Derived from spec P1 AC 1, 2, 8. Without it a recorded halt outranks every
+    other condition in `detect_phase.halt_reason` forever, and the only exit is
+    deleting the file that holds the immutable objective.
+    """
+
+    def test_the_recorded_reason_and_detail_are_cleared(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            self.assertEqual(_run(root, "--resume").returncode, 0)
+            self.assertEqual(_read(root)["halt"], {"reason": None, "detail": None})
+
+    def test_the_run_returns_to_active(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            _run(root, "--resume")
+            self.assertEqual(_read(root)["status"], "active")
+
+    def test_a_blocked_run_carrying_a_halt_is_resumable(self):
+        # `--halt blocker --status blocked` is the one halt that records a
+        # status other than `halted`; it must not be the one halt with no exit.
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, halt={"reason": "blocker", "detail": "waiting on ops"},
+                  status="blocked")
+            self.assertEqual(_run(root, "--resume").returncode, 0)
+            self.assertEqual(_read(root)["status"], "active")
+
+    def test_an_active_run_carrying_a_stale_halt_is_resumable(self):
+        # What `--status active` produces today: status moved, halt did not.
+        # Refusing this state would leave existing wreckage unrecoverable.
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, halt={"reason": "gate_stuck", "detail": "stale"}, status="active")
+            self.assertEqual(_run(root, "--resume").returncode, 0)
+            self.assertIsNone(_read(root)["halt"]["reason"])
+
+    def test_resume_alone_is_not_rejected_as_a_no_op(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            proc = _run(root, "--resume")
+            self.assertEqual(proc.returncode, 0)
+            self.assertNotIn("nothing to do", proc.stderr)
+
+    def test_an_explicit_status_wins_over_the_resume_default(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            _run(root, "--resume", "--status", "blocked")
+            self.assertEqual(_read(root)["status"], "blocked")
+
+
+class ResumeIsRecordedAndPreservesTheRun(unittest.TestCase):
+    """RESUME-02: the transition is auditable and costs nothing else.
+
+    Derived from spec P1 AC 3, 4. A state transition that leaves no trace is
+    unauditable, and one that moves a counter would let resuming a run walk it
+    into a different halt than the one it was resumed from.
+    """
+
+    def test_exactly_one_entry_is_appended(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            _run(root, "--resume")
+            self.assertEqual(len(_read(root)["iterations"]), 1)
+
+    def test_the_entry_is_recorded_against_the_halt_phase(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            _run(root, "--resume")
+            self.assertEqual(_read(root)["iterations"][-1]["phase"], "H")
+
+    def test_the_action_names_the_transition(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            _run(root, "--resume")
+            self.assertTrue(_read(root)["iterations"][-1]["action"].startswith("resume"))
+
+    def test_the_action_carries_the_detail_when_one_is_given(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            _run(root, "--resume", "--detail", "human approved another cycle")
+            self.assertIn("human approved another cycle",
+                          _read(root)["iterations"][-1]["action"])
+
+    def test_the_action_is_bare_when_no_detail_is_given(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            _run(root, "--resume")
+            self.assertEqual(_read(root)["iterations"][-1]["action"], "resume")
+
+    def test_the_counters_the_halt_conditions_read_are_untouched(self):
+        with tempfile.TemporaryDirectory() as root:
+            counters = {"gate_attempts": {"T1": 4}, "iterations_without_commit": 7,
+                        "started_at_ms": 1700000000000}
+            _seed(root, counters=dict(counters), **HALTED)
+            _run(root, "--resume")
+            self.assertEqual(_read(root)["counters"], counters)
+
+    def test_the_iteration_number_does_not_advance(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, iteration=9, **HALTED)
+            _run(root, "--resume")
+            self.assertEqual(_read(root)["iteration"], 9)
+
+    def test_the_objective_verify_and_reconciled_survive(self):
+        with tempfile.TemporaryDirectory() as root:
+            verify = {"rounds": 3, "epoch_rounds": 2, "last_verdict": "FAIL",
+                      "last_report": "validation.md", "gaps_open": 2,
+                      "verified_at": "abc1234"}
+            reconciled = [{"task": "T4", "winner": "git", "at": "2026-01-01T00:00:00Z"}]
+            _seed(root, verify=dict(verify), reconciled=list(reconciled),
+                  current_batch=["T5", "T6"], current_task="T5", **HALTED)
+            _run(root, "--resume")
+            after = _read(root)
+            self.assertEqual(after["objective"], OBJECTIVE)
+            self.assertEqual(after["verify"], verify)
+            self.assertEqual(after["reconciled"], reconciled)
+            self.assertEqual(after["current_batch"], ["T5", "T6"])
+            self.assertEqual(after["current_task"], "T5")
+
+    def test_the_log_stays_capped_at_the_limit(self):
+        with tempfile.TemporaryDirectory() as root:
+            full = [{"n": n, "at": "2026-01-01T00:00:00Z", "phase": "B",
+                     "action": "batch", "task": None, "commit": None}
+                    for n in range(50)]
+            _seed(root, iterations=full, **HALTED)
+            _run(root, "--resume")
+            entries = _read(root)["iterations"]
+            self.assertEqual(len(entries), 50)
+            self.assertEqual(entries[-1]["phase"], "H")
+            self.assertEqual(entries[0]["n"], 1)
+
+    def test_a_resume_that_also_closes_an_iteration_records_both(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            _run(root, "--resume", "--iteration-done", "--phase", "B", "--action", "carried on")
+            after = _read(root)
+            self.assertEqual(len(after["iterations"]), 2)
+            self.assertEqual(after["iteration"], 1)
+
+    def test_a_second_consecutive_resume_is_refused(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            _run(root, "--resume")
+            self.assertEqual(_run(root, "--resume").returncode, 2)
+
+
+class ResumeRefusals(unittest.TestCase):
+    """RESUME-03: each refusal exits 2 and writes nothing.
+
+    Derived from spec P1 AC 5, 6, 7. A refusal that half-applied its other
+    flags would leave a state nobody asked for, which is the rule
+    `--status complete` and the immutable objective already follow.
+    """
+
+    def test_no_recorded_halt_is_refused_naming_the_absence(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root)
+            before = _bytes(root)
+            proc = _run(root, "--resume")
+            self.assertEqual(proc.returncode, 2)
+            self.assertIn("no halt", proc.stderr)
+            self.assertEqual(_bytes(root), before)
+
+    def test_a_complete_run_is_refused_naming_the_status(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, status="complete", **{"halt": HALTED["halt"]})
+            before = _bytes(root)
+            proc = _run(root, "--resume")
+            self.assertEqual(proc.returncode, 2)
+            self.assertIn("complete", proc.stderr)
+            self.assertEqual(_bytes(root), before)
+
+    def test_resume_together_with_halt_is_refused_as_contradictory(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root, **HALTED)
+            before = _bytes(root)
+            proc = _run(root, "--resume", "--halt", "limit")
+            self.assertEqual(proc.returncode, 2)
+            self.assertIn("--resume", proc.stderr)
+            self.assertIn("--halt", proc.stderr)
+            self.assertEqual(_bytes(root), before)
+
+    def test_a_refusal_applies_none_of_the_other_flags(self):
+        with tempfile.TemporaryDirectory() as root:
+            _seed(root)
+            _run(root, "--resume", "--iteration-done", "--phase", "H")
+            self.assertEqual(_read(root)["iteration"], 0)
+
+    def test_an_unreadable_state_file_exits_one_not_two(self):
+        # A state that cannot be parsed cannot be resumed, and it is a read
+        # failure rather than a rejected invocation.
+        with tempfile.TemporaryDirectory() as root:
+            os.makedirs(os.path.join(root, ".specs", "features", FEATURE))
+            with open(_state_io.state_path(FEATURE, root), "w", encoding="utf-8") as fh:
+                fh.write("{not json")
+            self.assertEqual(_run(root, "--resume").returncode, 1)
+
+
 class Failures(unittest.TestCase):
     def test_a_missing_state_file_exits_non_zero_naming_the_path(self):
         with tempfile.TemporaryDirectory() as root:

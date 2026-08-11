@@ -333,6 +333,209 @@ class StageRoutingContractParity(unittest.TestCase):
         self.assertIn("validate_routing.py", readme)
 
 
+#: Phrasings that send the reader to an editor to lift a halt. The transition
+#: table shipped one for two releases: a halt cleared "by a human resolving the
+#: cause and clearing `halt.reason`", while `state-schema.md` said the file is
+#: machine-owned and must not be hand-edited. A reader who followed the first
+#: literally had to break the second, and `update_loop.py --resume` is the
+#: transition that makes both true at once.
+HAND_CLEARED_HALT = (
+    "clearing `halt.reason`",
+    "clearing halt.reason",
+    "clear `halt.reason`",
+    "clear halt.reason",
+)
+
+
+class ClearingAHaltHasOneSupportedRoute(unittest.TestCase):
+    """RESUME-06: the prose points at the flag, never at an editor."""
+
+    def test_no_shipped_document_sends_the_reader_to_the_field(self):
+        offenders = []
+        for relative, text in shipped_documents():
+            for claim in HAND_CLEARED_HALT:
+                for number, line in offending_lines(text, claim):
+                    offenders.append(f"{relative}:{number} ({claim!r}): {line}")
+        self.assertEqual(
+            offenders,
+            [],
+            "these lines tell a reader to lift a halt by hand; `loop.json` is "
+            "machine-owned and `update_loop.py --resume` is the transition:\n"
+            + "\n".join(offenders),
+        )
+
+    def test_a_reintroduced_instruction_is_named_with_its_location(self):
+        planted = "A halt clears only by a human clearing `halt.reason`.\n"
+        offenders = [
+            f"fake.md:{number} ({claim!r}): {line}"
+            for claim in HAND_CLEARED_HALT
+            for number, line in offending_lines(planted, claim)
+        ]
+        self.assertTrue(offenders)
+        self.assertIn("fake.md:1", offenders[0])
+
+    # Retraction without replacement leaves the reader with nothing, which is
+    # how the hand-edit instruction survived a rewrite the last time. Each
+    # check is scoped to the passage its criterion names: the flag being
+    # present *somewhere* in the file is not what any of them ask for, and a
+    # whole-file search passed while the mention sat in an unrelated section.
+
+    def test_the_transition_row_names_the_command(self):
+        row = table_row(
+            read_shipped("references/phase-transitions.md"),
+            "| `H` |",
+            "references/phase-transitions.md",
+        )
+        self.assertIn(
+            "update_loop.py --resume",
+            row,
+            "the H transition row says how a halt clears without naming the "
+            "command that clears it",
+        )
+
+    def test_the_halt_field_section_names_the_command(self):
+        body = section(
+            read_shipped("references/state-schema.md"), "## `halt`", "references/state-schema.md"
+        )
+        self.assertIn(
+            "update_loop.py <feature> --root <root> --resume",
+            collapsed(body),
+            "the `halt` field section does not carry the command that clears it",
+        )
+
+    def test_the_halt_phase_names_the_command(self):
+        body = section(read_shipped("SKILL.md"), "#### Phase H - Halt", "SKILL.md")
+        self.assertIn(
+            "update_loop.py <feature> --root <root> --resume",
+            collapsed(body),
+            "Phase H does not carry the command a human runs to lift the halt "
+            "it just recorded; naming the flag in passing is not the same thing",
+        )
+
+    def test_each_scope_excludes_the_passage_that_follows_it(self):
+        # The check that makes the three above mean anything: a scan running to
+        # the end of the file would pass on a mention in any later section.
+        skill = section(read_shipped("SKILL.md"), "#### Phase H - Halt", "SKILL.md")
+        self.assertIn("blast_radius", skill)
+        self.assertNotIn("### Step 3", skill)
+        schema = section(
+            read_shipped("references/state-schema.md"), "## `halt`", "references/state-schema.md"
+        )
+        self.assertIn("blast_radius", schema)
+        self.assertNotIn("## `iterations[]`", schema)
+        # `table_row` cannot silently pick between candidates: a decoy row
+        # planted above the real one would otherwise answer for it.
+        transitions = read_shipped("references/phase-transitions.md")
+        decoyed = transitions.replace("| `H` |", "| `H` | a decoy |\n| `H` |", 1)
+        with self.assertRaises(AssertionError):
+            table_row(decoyed, "| `H` |", "references/phase-transitions.md")
+
+
+def section(text, heading, where):
+    """The body of one section, from `heading` to the next heading of its level.
+
+    Scoped rather than whole-file. An instruction that drifts into a
+    neighbouring section still satisfies a search over the whole document, so a
+    whole-file check cannot tell "documented here" from "documented somewhere",
+    which is the only thing these criteria actually ask.
+    """
+    start = text.find(heading)
+    if start < 0:
+        raise AssertionError(f"{where}: the section anchored on {heading!r} is gone")
+    # Ends at the next heading of the same level *or shallower*. Stopping only
+    # at the same level would run a last-child section to end of file, which is
+    # no scope at all - the one `#### Phase H` hit before this was fixed.
+    level = len(heading) - len(heading.lstrip("#"))
+    rest = text[start + len(heading):]
+    ends = [found for found in
+            (rest.find("\n" + "#" * depth + " ") for depth in range(1, level + 1))
+            if found >= 0]
+    return heading + rest[:min(ends)] if ends else heading + rest
+
+
+def collapsed(text):
+    """`text` with line continuations and indentation flattened to one space.
+
+    A criterion that names a whole command is not met by the flag appearing in
+    a nearby sentence, and the command itself is wrapped across lines with a
+    backslash. Flattening lets the assertion be the command.
+    """
+    return re.sub(r"\s*\\?\s+", " ", text)
+
+
+def table_row(text, prefix, where):
+    """The one table row starting with `prefix`.
+
+    Raises on more than one match rather than taking the first: a second row
+    with the same prefix could answer for the real one, and which of them the
+    scan reads would be decided by document order.
+    """
+    rows = [line for line in text.splitlines() if line.startswith(prefix)]
+    if len(rows) != 1:
+        raise AssertionError(
+            f"{where}: expected exactly one table row starting {prefix!r}, found {len(rows)}"
+        )
+    return rows[0]
+
+
+class GateAttemptHasADocumentedWriter(unittest.TestCase):
+    """RESUME-05: `counters.gate_attempts` is written by exactly one step.
+
+    `limits.gate_attempts_per_task` halts on this counter, so an instruction
+    set that never writes it leaves the limit bounding nothing. That is how a
+    `gate_stuck` halt arrives with an empty counter: the limit never fired, so
+    a human recorded the halt by hand.
+    """
+
+    def test_skill_md_names_the_call_that_records_a_failed_gate(self):
+        self.assertIn(
+            "--gate-attempt",
+            read_shipped("SKILL.md"),
+            "SKILL.md no longer names --gate-attempt, so counters.gate_attempts "
+            "has no documented writer and limits.gate_attempts_per_task bounds nothing",
+        )
+
+    def test_the_call_sits_in_the_phase_that_runs_the_gate(self):
+        body = section(read_shipped("SKILL.md"), "#### Phase B - Execute one batch", "SKILL.md")
+        self.assertIn(
+            "update_loop.py <feature> --root <root> --gate-attempt",
+            collapsed(body),
+            "SKILL.md does not record a failed gate in Phase B, the only phase "
+            "that runs one",
+        )
+
+    def test_the_recovery_loop_carves_the_exception_in_both_rules(self):
+        # Two separate sentences forbade the write: "no counter moves" in the
+        # opening, and "never calls update_loop.py" in step 1. An exception
+        # stated in only one of them leaves the other still forbidding it.
+        text = read_shipped("references/recovery-loop.md")
+        head, _, body = text.partition("## Repair loop")
+        for section, where in (
+            (head, "the repairable-by-default rule"),
+            (body, "step 1 of the repair loop"),
+        ):
+            self.assertIn(
+                "--gate-attempt",
+                section,
+                f"references/recovery-loop.md: {where} still forbids the one "
+                "counter write Phase B requires",
+            )
+
+    def test_the_partition_separates_the_two_rules_it_checks(self):
+        text = read_shipped("references/recovery-loop.md")
+        head, separator, body = text.partition("## Repair loop")
+        self.assertTrue(separator, "the '## Repair loop' heading is gone")
+        self.assertIn("no counter moves", head)
+        self.assertIn("never calls", body)
+
+    def test_the_section_scan_stops_at_the_next_phase(self):
+        # A scan that ran to the end of the file would pass on a mention in any
+        # later branch, which is exactly the drift it is meant to catch.
+        body = section(read_shipped("SKILL.md"), "#### Phase B - Execute one batch", "SKILL.md")
+        self.assertIn("checkpoint.py", body)
+        self.assertNotIn("#### Phase V", body)
+
+
 #: The two `[stages.*]` examples in the README, by something only that block
 #: contains. The Configuration block carries the runtime stages; the Quick start
 #: block carries the domain stages a reader copies first.

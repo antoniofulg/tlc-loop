@@ -134,6 +134,30 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: M11 references/state-schema.md:243-245 (survived 396/396) (docs/parity)
 - last seen: 2026-08-09T08:37:24Z
 
+### L-021 - When an acceptance criterion scopes a documentation requirement to a named section, assert the needle inside that section, not across the whole file
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `docs-parity` · harmful: 0
+- features: halt-resume
+- evidence: scripts/test_unit_docs_parity.py:377-389 (mutants M11b, M12, M14) (docs-parity)
+- last seen: 2026-08-11T14:01:35Z
+
+### L-022 - A documentation guard that matches a command as a substring passes on a negated or commented-out copy of it, so bind the match to the affirmative instruction rather than to the characters
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `docs-parity` · harmful: 0
+- features: halt-resume
+- evidence: scripts/test_unit_docs_parity.py:456-463 (mutants P1, P1b, P2) (docs-parity)
+- last seen: 2026-08-11T14:25:09Z
+
+### L-023 - A test helper that returns the first matching line or heading binds the assertion to whichever passage comes first, so raise when more than one matches instead of silently picking one
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `test-helpers` · harmful: 0
+- features: halt-resume
+- evidence: scripts/test_unit_docs_parity.py:466-471 (mutant P3) (test-helpers)
+- last seen: 2026-08-11T14:25:09Z
+
+### L-024 - When a criterion names a full command and a qualifying clause, assert both, not just the distinguishing flag
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `docs-parity` · harmful: 0
+- features: halt-resume
+- evidence: scripts/test_unit_docs_parity.py:389 (mutants P5, P6) (docs-parity)
+- last seen: 2026-08-11T14:25:09Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

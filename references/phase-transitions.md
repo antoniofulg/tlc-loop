@@ -249,7 +249,7 @@ What has to become true before detection stops returning the same line.
 | `V` | A verdict is recorded: `PASS` closes the feature, `FAIL` with open gaps moves to `F`. |
 | `F` | The gaps are consumed (`gaps_open` back to 0), which returns detection to `V` for a fresh round. |
 | `E` | Terminal. Nothing follows. Print the done-signature and stop. |
-| `H` | Terminal for this run. A halt clears only by a human resolving the cause and clearing `halt.reason`, or by changing the config that tripped a limit. Re-invoking without changing anything prints the same halt line. |
+| `H` | Terminal for this run. A halt clears only when a human resolves the cause, or changes the config that tripped a limit, and then runs `update_loop.py --resume`. Re-invoking without changing anything prints the same halt line. |
 
 `E` and `H` are the only terminal phases. Everything else re-enters detection.
 
@@ -261,6 +261,11 @@ Two of these deserve emphasis:
   re-derived as pending.
 - **`H` does not clear itself.** Halting is halting, not asking. With nobody
   watching, a prompt is the same as a hang, so the run stops and records why.
+  Lifting it is a human action with its own flag - `--resume`, documented in
+  [state-schema.md](state-schema.md#halt) - and it clears the recorded halt
+  and nothing else. A derived condition that still holds re-halts the run
+  immediately, so resuming is a second look at the cause, not a way around
+  the limit.
 
 ---
 
