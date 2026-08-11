@@ -419,15 +419,16 @@ class ClearingAHaltHasOneSupportedRoute(unittest.TestCase):
         )
         self.assertIn(
             "update_loop.py <feature> --root <root> --resume",
-            collapsed(body),
-            "the `halt` field section does not carry the command that clears it",
+            collapsed(fenced_commands(body)),
+            "the `halt` field section does not carry the command that clears it "
+            "as a fenced call; a mention in prose is not an instruction",
         )
 
     def test_the_halt_phase_names_the_command(self):
         body = section(read_visible("SKILL.md"), "#### Phase H - Halt", "SKILL.md")
         self.assertIn(
             "update_loop.py <feature> --root <root> --resume",
-            collapsed(body),
+            collapsed(fenced_commands(body)),
             "Phase H does not carry the command a human runs to lift the halt "
             "it just recorded; naming the flag in passing is not the same thing",
         )
@@ -470,6 +471,50 @@ class ClearingAHaltHasOneSupportedRoute(unittest.TestCase):
             table_row(decoyed, "| `H` |", "references/phase-transitions.md")
 
 
+class AnInstructionLivesInAFence(unittest.TestCase):
+    """INTENT-02: a command named in passing is not a command being given.
+
+    Every shipped instruction to run something is a fenced block. Asserting
+    over the whole scope let a mention in surrounding prose answer for the
+    block a criterion actually names.
+    """
+
+    DOC = "## s\n\nrun `thing --flag` sometime\n\n```bash\nthing --other\n```\n"
+
+    def test_prose_outside_a_fence_is_not_an_instruction(self):
+        self.assertNotIn("thing --flag", fenced_commands(self.DOC))
+
+    def test_the_fenced_call_is_returned(self):
+        self.assertIn("thing --other", fenced_commands(self.DOC))
+
+    def test_a_scope_with_no_fence_yields_nothing(self):
+        self.assertEqual(fenced_commands("## s\n\njust prose, no block\n").strip(), "")
+
+    def test_the_backslash_continuation_still_matches(self):
+        body = section(read_visible("SKILL.md"), "#### Phase H - Halt", "SKILL.md")
+        self.assertIn(
+            "update_loop.py <feature> --root <root> --resume",
+            collapsed(fenced_commands(body)),
+        )
+
+    def test_moving_the_command_into_prose_fails_the_guard(self):
+        skill = read_visible("SKILL.md")
+        body = section(skill, "#### Phase H - Halt", "SKILL.md")
+        start = body.index("   ```bash")
+        block = body[start:body.index("```\n", start + 10) + 4]
+        as_prose = block.replace("```bash\n", "").replace("```\n", "")
+        edited = skill.replace(block, as_prose)
+        self.assertNotEqual(edited, skill, "the Phase H block moved; update this probe")
+        rescoped = section(edited, "#### Phase H - Halt", "SKILL.md")
+        # Still present in the section, and that is exactly the point: presence
+        # is what the old guard proved, and prose is not an instruction.
+        self.assertIn("update_loop.py <feature> --root <root> --resume", collapsed(rescoped))
+        self.assertNotIn(
+            "update_loop.py <feature> --root <root> --resume",
+            collapsed(fenced_commands(rescoped)),
+        )
+
+
 class AFencedHashIsCodeNotStructure(unittest.TestCase):
     """INTENT-04: a `#` inside a code block does not end a section.
 
@@ -508,7 +553,11 @@ class AFencedHashIsCodeNotStructure(unittest.TestCase):
         )
         self.assertNotEqual(edited, skill, "the Phase H block moved; update this probe")
         body = section(edited, "#### Phase H - Halt", "SKILL.md")
-        self.assertIn("update_loop.py <feature> --root <root> --resume", collapsed(body))
+        # Through the same helpers the real guard uses, so the probe mirrors it.
+        self.assertIn(
+            "update_loop.py <feature> --root <root> --resume",
+            collapsed(fenced_commands(body)),
+        )
         self.assertNotIn("### Step 3", body)
 
 
@@ -572,6 +621,26 @@ def section(text, heading, where):
     return "".join(lines[start:end])
 
 
+def fenced_commands(text):
+    """Only the lines of `text` that sit inside a fenced block.
+
+    Every instruction to run something in these documents is a fenced call, so
+    a criterion naming a command means the block, not a mention of it. Asserting
+    over the whole scope let surrounding prose answer for the block - which is
+    how "never run this:" above the real call passed.
+
+    Returns the fence bodies joined, with the fence markers dropped. A scope
+    with no fence yields an empty string rather than raising, so the guard
+    fails with its own message instead of a traceback.
+    """
+    lines = text.splitlines(keepends=True)
+    fenced = _fenced(lines)
+    return "".join(
+        line for number, line in enumerate(lines)
+        if number in fenced and not line.lstrip().startswith("```")
+    )
+
+
 def collapsed(text):
     """`text` with line continuations and indentation flattened to one space.
 
@@ -618,7 +687,7 @@ class GateAttemptHasADocumentedWriter(unittest.TestCase):
         body = section(read_visible("SKILL.md"), "#### Phase B - Execute one batch", "SKILL.md")
         self.assertIn(
             "update_loop.py <feature> --root <root> --gate-attempt",
-            collapsed(body),
+            collapsed(fenced_commands(body)),
             "SKILL.md does not record a failed gate in Phase B, the only phase "
             "that runs one",
         )

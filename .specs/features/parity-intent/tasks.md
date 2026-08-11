@@ -126,7 +126,7 @@ T3 → T4
 
 ---
 
-### T3: Require a fenced artifact where the criterion names one
+### T3: Require a fenced artifact where the criterion names one ✅
 
 **What**: Add a `fenced_commands()` helper returning only the commands inside fenced blocks, and assert against it in the three guards whose artifact is a fenced call.
 **Where**: `scripts/test_unit_docs_parity.py`
@@ -248,7 +248,7 @@ No task carries `Tests: none`. Each helper's discrimination test - the planted m
 | Requirement ID | Tasks | Status |
 | --- | --- | --- |
 | INTENT-01 | T1 | Verified in T1 |
-| INTENT-02 | T3 | Pending |
+| INTENT-02 | T3 | Verified in T3 |
 | INTENT-03 | T4 | Pending |
 | INTENT-04 | T2 | Verified in T2 |
 
