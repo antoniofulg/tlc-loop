@@ -35,6 +35,9 @@ thing the feature exists to prevent, and the suite reports PASS.
 | Proving intent in general | Out of reach for a substring check. The target is the three failure modes that shipped, not every way prose can lie. |
 | Natural-language negation detection | A fixed vocabulary of negated imperatives, verified against this corpus. See the assumption below. |
 | Changing any shipped document | No prose is wrong today. This is guard precision only. |
+| An unterminated-fence rule in `_fenced()` | `fence_spans()` treats an unclosed fence as running to the end and a test pins that. `_fenced()` is left alone: it serves the `no_diff_tasks` scan, 0 shipped documents have an odd fence count, and changing it would touch a check this feature has no quarrel with. **Recorded, not fixed.** |
+| `visible()` stripping `<!--` inside a code fence | A fenced example containing `<!--` would be partly erased before scanning, turning a valid document red - the same false-positive class as P7. 0 shipped fences contain it, and making `visible()` fence-aware means splitting lines before comments are removed, which inverts the order the other helpers assume. **Recorded, not fixed.** |
+| An upper bound on `INTRO_LINES` | The lower bound is pinned - a wrapped introducing sentence must still be read - and widening past 4 is caught by the corpus safety net rather than by a boundary test. |
 
 ---
 

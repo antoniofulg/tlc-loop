@@ -188,6 +188,36 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: P2 AC 3 / scripts/test_unit_docs_parity.py:662 (testing)
 - last seen: 2026-08-11T16:14:11Z
 
+### L-030 - A corpus-wide safety-net test must call the production helper, not re-implement its scan; a private copy drifts the moment the helper changes.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `docs-parity` · harmful: 0
+- features: parity-intent
+- evidence: mutants M2/M24/V1 / scripts/test_unit_docs_parity.py:659 (docs-parity)
+- last seen: 2026-08-11T17:01:49Z
+
+### L-031 - When a test passes a multi-line literal to a helper that compares against collapsed text, the comparison can never match and the assertion is unfalsifiable.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `test-helpers` · harmful: 0
+- features: parity-intent
+- evidence: New Gap A / scripts/test_unit_docs_parity.py:535 (test-helpers)
+- last seen: 2026-08-11T17:01:49Z
+
+### L-032 - Correcting a false rationale in the spec is half the fix; the same sentence usually also lives in a code comment, and only the spec gets rewritten.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `docs-parity` · harmful: 0
+- features: parity-intent
+- evidence: spec.md:48 corrected while scripts/test_unit_docs_parity.py:537 kept the retracted claim (docs-parity)
+- last seen: 2026-08-11T17:01:49Z
+
+### L-033 - Delete __pycache__ before every mutation run: CPython invalidates bytecode on (mtime, size), so a same-length edit in the same second makes a live mutant look covered.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `testing` · harmful: 0
+- features: parity-intent
+- evidence: round-2 sensor methodology, reproduced with os.utime (testing)
+- last seen: 2026-08-11T17:01:49Z
+
+### L-034 - Test a guard's plumbing through the guard: asserting on the inner helper leaves the wiring in the assert_* wrapper unpinned.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `test-helpers` · harmful: 0
+- features: parity-intent
+- evidence: mutant M23 / scripts/test_unit_docs_parity.py:376 (test-helpers)
+- last seen: 2026-08-11T17:01:49Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

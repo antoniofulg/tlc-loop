@@ -532,17 +532,26 @@ class ANegatedCommandIsNotAnInstruction(unittest.TestCase):
         )
         self.assertEqual(negated_by(body, self.COMMAND), "never run")
 
-    def test_a_negation_in_an_earlier_sentence_does_not_flag(self):
-        # The Phase B timeout instruction says "do not retry" about something
-        # else on its way to a call the reader must make. A window-based scan
-        # flags it; a clause-based one does not.
+    def test_a_nearby_negation_about_something_else_does_not_flag(self):
+        # Phase B reaches a correct `--halt executor` call through "do not
+        # retry". What keeps that affirmative is the vocabulary being
+        # verb-specific - `retry` is not one of its verbs - and not the width
+        # of the window, which was the retracted claim.
+        #
+        # The needle is the collapsed form on purpose. Passing the shipped
+        # backslash continuation verbatim matches no fence at all, which is how
+        # this test spent a round asserting nothing at any window width.
         body = section(
             read_visible("SKILL.md"), "#### Phase B - Execute one batch", "SKILL.md"
         )
         self.assertIn("do not retry", body)
-        self.assertIsNone(
-            negated_by(body, "update_loop.py <feature> --root <root> \\\n     --halt executor")
+        command = "update_loop.py <feature> --root <root> --halt executor"
+        self.assertIn(
+            command,
+            collapsed(fenced_commands(body)),
+            "the needle matches no fence, so the assertion below proves nothing",
         )
+        self.assertIsNone(negated_by(body, command))
 
     def test_an_affirmative_copy_rescues_a_negated_one(self):
         body = section(
@@ -597,7 +606,7 @@ class ANegatedCommandIsNotAnInstruction(unittest.TestCase):
         for relative, text in markdown_documents():
             lines = visible(text).splitlines()
             for opening, _ in fence_spans(lines):
-                intro = " ".join(lines[max(0, opening - INTRO_LINES):opening]).lower()
+                intro = fence_intro(lines, opening).lower()
                 if any(word in intro for word in bare):
                     flagged.append(relative)
         self.assertTrue(
@@ -634,6 +643,15 @@ class ANegatedCommandIsNotAnInstruction(unittest.TestCase):
                 self, row, "update_loop.py --resume", "the H transition row", fenced=False
             )
 
+    def test_an_unterminated_fence_runs_to_the_end(self):
+        # `_fenced()` already assumes this; `fence_spans` has to agree with it
+        # or a document with an odd fence count would report a block that ends
+        # where no `` ``` `` is.
+        lines = "## s\n```bash\nthing --flag\nstill inside\n".splitlines()
+        self.assertEqual(fence_spans(lines), [(1, len(lines))])
+        doc = "## s\n\ntext\n\nNever run this:\n```bash\nthing --flag\n"
+        self.assertEqual(negated_by(doc, "thing --flag"), "never run")
+
     def test_the_guard_itself_rejects_a_negated_fence(self):
         # The fenced mirror of the row case above. Forcing `fenced` False here
         # makes the scan read the affirmative prose mention instead of the
@@ -658,17 +676,20 @@ class ANegatedCommandIsNotAnInstruction(unittest.TestCase):
 
     def test_the_vocabulary_flags_no_fence_in_any_shipped_document(self):
         # The guard against a later addition quietly breaking valid prose.
+        #
+        # Through the production helpers, not a copy of them. The copy kept a
+        # clause split production had dropped, hardcoded the window, and read
+        # closing fences as openings - 30 fence lines where only 15 open one -
+        # so it could report a clean corpus while production flagged a real
+        # document.
         offenders = []
         for relative, text in markdown_documents():
             lines = visible(text).splitlines()
-            for number, line in enumerate(lines):
-                if not line.lstrip().startswith("```"):
-                    continue
-                intro = " ".join(lines[max(0, number - 4):number]).lower()
-                clause = intro.rsplit(". ", 1)[-1]
-                for marker in NEGATED_IMPERATIVES:
-                    if marker in clause:
-                        offenders.append(f"{relative}:{number + 1} ({marker!r})")
+            for opening, _ in fence_spans(lines):
+                intro = fence_intro(lines, opening).lower()
+                marker = next((m for m in NEGATED_IMPERATIVES if m in intro), None)
+                if marker:
+                    offenders.append(f"{relative}:{opening + 1} ({marker!r})")
         self.assertEqual(
             offenders,
             [],
@@ -871,6 +892,18 @@ def fence_spans(lines):
     return spans
 
 
+def fence_intro(lines, opening):
+    """The prose introducing the fence that opens at line `opening`.
+
+    One definition, used by `negated_by` and by the test that asserts the
+    vocabulary flags nothing shipped. That test used to recompute this, and
+    drifted from it: it kept a clause split production had dropped, hardcoded
+    the window, and counted closing fences as openings - so it could report a
+    clean corpus while production flagged a real document.
+    """
+    return " ".join(lines[max(0, opening - INTRO_LINES):opening])
+
+
 def negated_by(text, command, fenced=True):
     """The negated imperative introducing `command`, or None.
 
@@ -890,8 +923,7 @@ def negated_by(text, command, fenced=True):
     lines = text.splitlines()
     if fenced:
         places = [
-            (" ".join(lines[max(0, opening - INTRO_LINES):opening]),
-             " ".join(lines[opening + 1:closing]))
+            (fence_intro(lines, opening), " ".join(lines[opening + 1:closing]))
             for opening, closing in fence_spans(lines)
         ]
     else:
