@@ -76,10 +76,11 @@ bootstrap. Never hand-edit `loop.json`, and never commit outside
 the verifier read, and anything committed afterwards is unverified code however
 green the gates. `checkpoint.py` refuses ordinary commits at `phase=E` and
 `phase=H`; `--seal` and `--reopen` are the two named routes for a change that
-must land after a PASS. The full contract - coverage, the seal, epochs, the
-finalizer - is in
-[verification-freshness.md](references/verification-freshness.md), which is the
-only place any of it is described.
+must land after a PASS. Read
+[verification-freshness.md](references/verification-freshness.md) **in full**
+the moment a verify round returns PASS, a commit has to land after one, or a
+`verify_exhausted` halt appears. It is the only place coverage, the seal,
+epochs, the finalizer and the publish preflight are described.
 
 **Only `finish_loop.py` prints the done-signature.** Not this document, not the
 model, not `loop.sh`. Deciding a run is finished is a deterministic check over
